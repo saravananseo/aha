@@ -26,14 +26,12 @@ import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, writeBatch }
 // ║  PASTE YOUR firebaseConfig HERE  (Project Settings → Web)   ║
 // ╚══════════════════════════════════════════════════════════════╝
 const firebaseConfig = {
-  apiKey: "AIzaSyDn_xEGexA556-Ed-HrHHVqkdSWiG3qA-Q",
-  authDomain: "aha-finance-a280d.firebaseapp.com",
-  databaseURL: "https://aha-finance-a280d-default-rtdb.firebaseio.com",
-  projectId: "aha-finance-a280d",
-  storageBucket: "aha-finance-a280d.firebasestorage.app",
-  messagingSenderId: "1077359687348",
-  appId: "1:1077359687348:web:c20b9b3446c74b25d489e1",
-  measurementId: "G-42TCYVK9KM"
+  apiKey:            "PASTE_apiKey_HERE",
+  authDomain:        "PASTE_authDomain_HERE",
+  projectId:         "PASTE_projectId_HERE",
+  storageBucket:     "PASTE_storageBucket_HERE",
+  messagingSenderId: "PASTE_messagingSenderId_HERE",
+  appId:             "PASTE_appId_HERE"
 };
 
 const _configured = !firebaseConfig.apiKey.includes("PASTE");
@@ -857,9 +855,8 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-primary" id="imp-confirm-btn" onclick="confirmImport()">✓ Import All</button>
         <button class="btn btn-secondary btn-sm" onclick="showImportStep(2)">← Back</button>
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)">
-          <input type="checkbox" id="imp-replace-check" style="accent-color:var(--accent)">
-          <label for="imp-replace-check">Replace duplicates (same year+month+day)</label>
+        <div style="font-size:10px;color:var(--muted);letter-spacing:.3px">
+          ℹ️ Existing entries for the same date will be updated, not duplicated
         </div>
       </div>
     </div>
@@ -2089,16 +2086,26 @@ function previewImport(){
     };
   });
 
-  // Summary
+  // Summary — count duplicates vs new entries
   const total=preview.length;
   const ti=preview.reduce((s,r)=>s+r.salary+r.interest+r.dividend+r.hedging+r.others,0);
   const te=preview.reduce((s,r)=>s+r.food+r.medical+r.travel+r.edu+r.cloth+r.rent+r.other,0);
+  const dupCount = preview.filter(r =>
+    dailyData.some(d =>
+      Number(d.year)  === Number(r.year)  &&
+      String(d.month) === String(r.month) &&
+      Number(d.day)   === Number(r.day)
+    )
+  ).length;
+  const newCount = total - dupCount;
   document.getElementById('imp-preview-summary').innerHTML=`
-    <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:12px">
-      <span>📋 <b>${total}</b> rows ready to import</span>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
+      <span>📋 <b>${total}</b> rows</span>
+      <span style="color:var(--green)">✦ <b>${newCount}</b> new</span>
+      ${dupCount ? `<span style="color:var(--gold)">↻ <b>${dupCount}</b> will update existing (no duplicates)</span>` : '<span style="color:var(--green)">✓ No duplicates</span>'}
       <span style="color:var(--green)">Inc: <b>${fvs(ti)}</b></span>
       <span style="color:var(--red)">Exp: <b>${fvs(te)}</b></span>
-      ${errors.length?`<span style="color:var(--red)">⚠ ${errors.length} warnings</span>`:'<span style="color:var(--green)">✓ No errors</span>'}
+      ${errors.length?`<span style="color:var(--red)">⚠ ${errors.length} warnings</span>`:''}
     </div>`;
 
   const errEl=document.getElementById('imp-preview-errors');
@@ -2118,20 +2125,35 @@ function previewImport(){
 function confirmImport(){
   const preview=window._importPreview||[];
   if(!preview.length){toast('Nothing to import','error');return;}
-  const replace=document.getElementById('imp-replace-check')?.checked;
-  let added=0,replaced=0;
+
+  let added=0, updated=0, skipped=0;
+
   preview.forEach(entry=>{
-    entry.id=nid();
-    if(replace){
-      const idx=dailyData.findIndex(d=>d.year===entry.year&&d.month===entry.month&&d.day===entry.day);
-      if(idx>=0){dailyData[idx]={...entry,id:dailyData[idx].id};replaced++;return;}
+    entry.id = nid();
+    // Always match on year + month + day — replace if exists, add if new
+    const idx = dailyData.findIndex(d =>
+      Number(d.year)  === Number(entry.year)  &&
+      String(d.month) === String(entry.month) &&
+      Number(d.day)   === Number(entry.day)
+    );
+    if(idx >= 0){
+      // Preserve original id, update everything else
+      dailyData[idx] = {...entry, id: dailyData[idx].id};
+      updated++;
+    } else {
+      dailyData.push(entry);
+      added++;
     }
-    dailyData.push(entry);added++;
   });
+
   LS.set(KEYS.daily,dailyData);fbAutoSync();
   renderDailyTable(); renderMonthlyView(); updateMonthlyStats();
   closeImportModal();
-  toast(`Import done! ${added} added${replaced?', '+replaced+' replaced':''}`, 'success');
+
+  const parts = [];
+  if(added)   parts.push(`${added} new`);
+  if(updated) parts.push(`${updated} updated`);
+  toast(`Import done — ${parts.join(', ')} ${updated ? '(no duplicates created)' : ''}`, 'success');
 }
 
 function downloadTemplate(){
