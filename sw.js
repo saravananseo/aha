@@ -1,6 +1,6 @@
 // AHA Finance — Service Worker v2
-const CACHE = 'aha-v3';
-const SHELL = ['/index.html', '/manifest.json', '/icons/icon-192x192.png', '/icons/icon-512x512.png'];
+const CACHE = 'aha-v5';
+const SHELL = ['/aha/index.html', '/aha/manifest.json', '/aha/icons/icon-192x192.png', '/aha/icons/icon-512x512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c =>
