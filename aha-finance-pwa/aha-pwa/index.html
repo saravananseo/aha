@@ -2222,14 +2222,12 @@ updateInvStats();
 
 
 // ═══════════════════════════════════════════════════════════════════
-// SERVICE WORKER
+// SERVICE WORKER — register immediately, not on 'load'
 // ═══════════════════════════════════════════════════════════════════
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () =>
-    navigator.serviceWorker.register('./sw.js')
-      .then(r => console.log('[SW] registered', r.scope))
-      .catch(e => console.warn('[SW] failed', e))
-  );
+  navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    .then(r => console.log('[SW] registered scope:', r.scope))
+    .catch(e => console.warn('[SW] failed:', e));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2237,22 +2235,48 @@ if ('serviceWorker' in navigator) {
 // ═══════════════════════════════════════════════════════════════════
 let _dip = null;
 window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault(); _dip = e;
-  if (!sessionStorage.getItem('pwa-ok')) setTimeout(() => {
-    document.getElementById('pwa-banner')?.classList.add('show');
-  }, 3500);
+  e.preventDefault();
+  _dip = e;
+  console.log('[PWA] beforeinstallprompt fired ✓');
+  const dismissedUntil = parseInt(localStorage.getItem('pwa-dismissed-until') || '0');
+  if (Date.now() > dismissedUntil) {
+    setTimeout(() => {
+      document.getElementById('pwa-banner')?.classList.add('show');
+    }, 2000);
+  }
 });
 window.addEventListener('appinstalled', () => {
   document.getElementById('pwa-banner')?.classList.remove('show');
 });
-function dismissPwa() { sessionStorage.setItem('pwa-ok','1'); document.getElementById('pwa-banner')?.classList.remove('show'); }
+function dismissPwa() {
+  document.getElementById('pwa-banner')?.classList.remove('show');
+  // Hide for 24h — use localStorage so it persists but resets daily
+  localStorage.setItem('pwa-dismissed-until', Date.now() + 86400000);
+}
 async function installPwa() {
-  if (!_dip) return;
+  if (!_dip) {
+    // Fallback: guide user to Chrome menu
+    alert('To install:\n1. Tap the ⋮ menu in Chrome\n2. Tap "Add to Home screen"\n3. Tap "Install"');
+    return;
+  }
   _dip.prompt();
-  await _dip.userChoice;
+  const { outcome } = await _dip.userChoice;
+  console.log('[PWA] install outcome:', outcome);
   _dip = null;
   document.getElementById('pwa-banner')?.classList.remove('show');
+  document.getElementById('sm-install-row').style.display = 'none';
 }
+
+// Keep install button in sync modal in sync with prompt availability
+window.addEventListener('beforeinstallprompt', () => {
+  const row = document.getElementById('sm-install-row');
+  if (row) row.style.display = 'block';
+});
+window.addEventListener('appinstalled', () => {
+  document.getElementById('pwa-banner')?.classList.remove('show');
+  document.getElementById('sm-install-row').style.display = 'none';
+  toast('App installed successfully! 🎉', 'success');
+});
 
 // Offline indicator
 window.addEventListener('online',  () => document.getElementById('offline-pill')?.classList.remove('show'));
@@ -2500,6 +2524,11 @@ document.getElementById('sync-modal')?.addEventListener('click', e => {
       <button class="sm-close-btn" onclick="closeSyncModal()">×</button>
     </div>
     <p class="sm-sub">Your data syncs across all devices in real-time via Firebase Firestore.<br>Sign in with Google — each account gets its own private data.</p>
+    <div id="sm-install-row" style="display:none;margin-bottom:16px">
+      <button onclick="installPwa()" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+        📲 Install App on this device
+      </button>
+    </div>
 
     <div id="sm-config-badge"></div>
 
