@@ -618,6 +618,7 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
         </div>
         <div class="filter-actions">
           <span id="daily-count" class="filter-count">—</span>
+          <button class="btn btn-danger btn-sm" id="clear-month-btn" onclick="clearSelectedMonth()" style="display:none">🗑 Clear Month</button>
           <button class="btn btn-primary btn-sm" onclick="openDailyPanel()">＋ Add Day</button>
         </div>
       </div>
@@ -1045,7 +1046,33 @@ let mSortKey='month', mSortDir=1;
 function setDailyFilter(type, val, el){
   if(type==='year'){ dYear=val; document.querySelectorAll('#daily-year-pills .pill').forEach(p=>p.classList.remove('active-year')); el.classList.add('active-year'); }
   if(type==='month'){ dMonth=val; document.querySelectorAll('#daily-month-pills .pill').forEach(p=>p.classList.remove('active-month')); el.classList.add('active-month'); }
+  // Show "Clear Month" only when a specific year AND specific month are selected
+  const clearBtn = document.getElementById('clear-month-btn');
+  if(clearBtn) clearBtn.style.display = (dYear!=='ALL' && dMonth!=='ALL') ? 'flex' : 'none';
   renderDailyTable(); updateDailyStats();
+}
+
+function clearSelectedMonth(){
+  if(dYear==='ALL' || dMonth==='ALL'){
+    toast('Select a specific year and month first', 'error'); return;
+  }
+  const count = dailyData.filter(d =>
+    String(d.year) === String(dYear) && String(d.month) === String(dMonth)
+  ).length;
+  if(!count){ toast(`No entries found for ${dMonth} ${dYear}`, 'error'); return; }
+
+  // Confirm before deleting
+  const confirmed = confirm(
+    `Delete all ${count} entries for ${dMonth} ${dYear}?\n\nThis cannot be undone.`
+  );
+  if(!confirmed) return;
+
+  dailyData = dailyData.filter(d =>
+    !(String(d.year) === String(dYear) && String(d.month) === String(dMonth))
+  );
+  LS.set(KEYS.daily, dailyData);fbAutoSync();
+  renderDailyTable(); renderMonthlyView(); updateMonthlyStats();
+  toast(`Cleared all ${count} entries for ${dMonth} ${dYear}`, 'success');
 }
 function setMonthlyFilter(type, val, el){
   if(type==='year'){ mYear=val; document.querySelectorAll('#monthly-year-pills .pill').forEach(p=>p.classList.remove('active-year')); el.classList.add('active-year'); }
