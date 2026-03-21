@@ -11,8 +11,13 @@
 <meta name="description" content="Personal Finance Tracker — Income, Expenses, Investments">
 <title>AHA — Personal Finance Dashboard</title>
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icons/icon-192x192.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152x152.png">
+<link rel="apple-touch-icon" sizes="167x167" href="icons/icon-192x192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-192x192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512x512.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+<link rel="icon" type="image/png" sizes="96x96"   href="icons/icon-96x96.png">
 
 <!-- Firebase SDK (ESM) -->
 <script type="module">
@@ -2030,30 +2035,35 @@ function showImportError(msg){
 }
 
 // Auto-detect column mappings
+// Uses EXACT normalized match only — never substring.
+// Prevents 'OtherIncome' matching the 'other' (expense) field and vice versa.
 const FIELD_MAP={
-  year:['year','yr','yyyy'],
-  month:['month','mon','mth','mnth'],
-  day:['day','date','dd','dt'],
-  salary:['salary','sal','pay','wages'],
+  year:    ['year','yr','yyyy'],
+  month:   ['month','mon','mth','mnth'],
+  day:     ['day','dd','dt'],
+  salary:  ['salary','sal','pay','wages'],
   interest:['interest','int','intr'],
   dividend:['dividend','div','divid'],
-  hedging:['hedging','hedge','hedg'],
-  others:['otherincome','other income','other_income','otherinc','income others','others income'],
-  food:['food','meal','meals','groceries','grocery'],
-  medical:['medical','med','medicine','health','doctor'],
-  travel:['travel','transport','fuel','petrol','commute','ftag'],
-  edu:['education','edu','school','tuition','fees'],
-  cloth:['clothes','clothing','cloth','dress'],
-  rent:['rent','house rent','rental'],
-  other:['other','otherexpense','other expense','misc','miscellaneous'],
-  comment:['comment','comments','note','notes','remarks','description'],
+  hedging: ['hedging','hedge','hedg'],
+  // Other INCOME — must never match bare 'other' (which belongs to expense)
+  others:  ['otherincome','otherinc','incomeothers','othersincome','otherincomefield'],
+  food:    ['food','meal','meals','groceries','grocery','foodexpense'],
+  medical: ['medical','med','medicine','health','doctor','medicalexpense'],
+  travel:  ['travel','transport','fuel','petrol','commute','ftag','travelexpense'],
+  edu:     ['education','edu','school','tuition','fees','educationexpense'],
+  cloth:   ['clothes','clothing','cloth','dress'],
+  rent:    ['rent','houserent','rental'],
+  // Other EXPENSE — must never match 'otherincome'
+  other:   ['otherexpense','otherexp','miscellaneous','misc','otherexpenses'],
+  comment: ['comment','comments','note','notes','remarks','description'],
 };
 
 function autoDetectMapping(){
   const map={};
-  const normalize=s=>s.toLowerCase().replace(/[\s_-]/g,'');
+  // Exact match only: lowercase, strip spaces/underscores/hyphens, then compare
+  const normalize=s=>s.toLowerCase().replace(/[\s_\-]/g,'');
   Object.keys(FIELD_MAP).forEach(field=>{
-    const found=impHeaders.find(h=>FIELD_MAP[field].some(alias=>normalize(h)===alias||normalize(h).includes(alias)));
+    const found=impHeaders.find(h=>FIELD_MAP[field].some(alias=>normalize(h)===alias));
     map[field]=found||'';
   });
   return map;
