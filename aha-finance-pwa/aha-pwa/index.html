@@ -409,15 +409,13 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
 .btn-google:hover { box-shadow:0 2px 12px rgba(0,0,0,.18); }
 .btn-google img { width:18px;height:18px; }
-.btn-push { background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;transition:all .2s; }
-.btn-push:hover { background:var(--accent-hover); }
-.btn-pull { background:var(--blue);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;transition:all .2s; }
-.btn-pull:hover { background:#2563eb; }
 .btn-signout { background:transparent;border:1px solid var(--border2);color:var(--muted);border-radius:10px;padding:10px 13px;font-size:11px;cursor:pointer; }
-.sm-log { font-size:10px;color:var(--muted);margin-top:12px;line-height:1.8;max-height:90px;overflow-y:auto;font-family:'DM Mono',monospace; }
-.sm-log .lok  { color:var(--green); }
-.sm-log .lerr { color:var(--red); }
-.sm-log .linfo{ color:var(--accent5); }
+.sm-last-sync { font-size:10px;color:var(--muted);margin-top:10px;font-family:'DM Mono',monospace; }
+.sm-last-sync span { color:var(--green); }
+.sm-sync-status { display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;font-size:11px;margin-top:10px; }
+.sm-sync-status.ok   { background:rgba(16,185,129,.08);color:var(--green);border:1px solid rgba(16,185,129,.2); }
+.sm-sync-status.busy { background:rgba(245,158,11,.08);color:var(--gold);border:1px solid rgba(245,158,11,.2); }
+.sm-sync-status.err  { background:rgba(239,68,68,.08);color:var(--red);border:1px solid rgba(239,68,68,.2); }
 .sm-badge { display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:5px 11px;border-radius:8px;margin-bottom:14px; }
 .sm-badge.ok  { background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.25); }
 .sm-badge.bad { background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.25); }
@@ -2216,33 +2214,34 @@ window.toggleTheme = function() {
 };
 
 // ═══════════════════════════════════════════════════════════════════
-// FIREBASE FIRESTORE SYNC
+// FIREBASE AUTO-SYNC  — fully automatic, no push/pull buttons
 // ═══════════════════════════════════════════════════════════════════
-let _syncUnsub = null;   // live listener unsubscribe
+let _syncUnsub    = null;   // Firestore live listener
+let _syncPending  = false;  // write in flight?
+let _lastSyncTime = null;   // last successful sync timestamp
 
-// ── helpers ──────────────────────────────────────────────────────
-function syncLog(msg, type='info') {
-  const t = new Date().toLocaleTimeString();
-  const line = `<div class="l${type}">[${t}] ${msg}</div>`;
-  ['sm-log-guest','sm-log-user'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.innerHTML += line; el.scrollTop = el.scrollHeight; }
-  });
-}
-
+// ── status helpers ────────────────────────────────────────────────
 function setSyncBtn(state, label) {
   const btn = document.getElementById('sync-btn');
   const lbl = document.getElementById('sync-label');
-  if (btn) { btn.className = ''; btn.classList.add(state); }
+  if (btn) { btn.className = ''; if(state) btn.classList.add(state); }
   if (lbl) lbl.textContent = label;
 }
 
-function userDocRef(uid) {
-  const { db, doc } = window._FB;
-  return doc(db, 'users', uid, 'finance', 'data');
+function setSyncStatus(state, msg) {
+  const el = document.getElementById('sm-sync-status');
+  if (!el) return;
+  el.className = 'sm-sync-status ' + state;
+  el.textContent = msg;
 }
 
-// ── auth change handler ───────────────────────────────────────────
+function updateLastSyncLabel() {
+  if (!_lastSyncTime) return;
+  const el = document.getElementById('sm-last-sync-time');
+  if (el) el.textContent = _lastSyncTime.toLocaleTimeString();
+}
+
+// ── auth state → auto-start listener on sign-in ───────────────────
 window.onFbAuthChange = function(user) {
   const guestEl = document.getElementById('sm-guest');
   const userEl  = document.getElementById('sm-user');
@@ -2250,12 +2249,15 @@ window.onFbAuthChange = function(user) {
   if (user) {
     if (guestEl) guestEl.style.display = 'none';
     if (userEl)  userEl.style.display  = 'block';
-    document.getElementById('sm-avatar').src   = user.photoURL  || '';
-    document.getElementById('sm-uname').textContent  = user.displayName || 'User';
-    document.getElementById('sm-email').textContent  = user.email       || '';
-    setSyncBtn('ok', user.displayName?.split(' ')[0] || 'Synced');
-    syncLog(`Signed in as ${user.email}`, 'ok');
-    startLiveSync(user.uid);
+    const av = document.getElementById('sm-avatar');
+    const un = document.getElementById('sm-uname');
+    const em = document.getElementById('sm-email');
+    if (av) av.src = user.photoURL || '';
+    if (un) un.textContent = user.displayName || 'User';
+    if (em) em.textContent = user.email || '';
+    setSyncBtn('busy', 'Connecting…');
+    setSyncStatus('busy', '⏳ Connecting to Firestore…');
+    startAutoSync(user.uid);
   } else {
     if (guestEl) guestEl.style.display = 'block';
     if (userEl)  userEl.style.display  = 'none';
@@ -2264,17 +2266,19 @@ window.onFbAuthChange = function(user) {
   }
 };
 
-// ── sign in ───────────────────────────────────────────────────────
+// ── Google sign-in ────────────────────────────────────────────────
 async function fbSignIn() {
-  const { auth, GoogleAuthProvider, signInWithPopup } = window._FB;
-  if (!window._FB.configured) { syncLog('Firebase not configured yet — see setup guide below', 'err'); return; }
+  if (!window._FB?.configured) {
+    toast('Firebase not configured — see setup guide in Sync panel', 'error'); return;
+  }
   try {
     setSyncBtn('busy', 'Signing in…');
-    syncLog('Opening Google sign-in…', 'info');
+    const { auth, GoogleAuthProvider, signInWithPopup } = window._FB;
     await signInWithPopup(auth, new GoogleAuthProvider());
+    // onFbAuthChange fires automatically after this
   } catch(e) {
     setSyncBtn('err', 'Error');
-    syncLog('Sign-in failed: ' + e.message, 'err');
+    toast('Sign-in failed: ' + e.message, 'error');
   }
 }
 
@@ -2282,92 +2286,98 @@ async function fbSignIn() {
 async function fbSignOut() {
   const { auth, signOut } = window._FB;
   await signOut(auth);
-  syncLog('Signed out', 'info');
   setSyncBtn('', 'Sync');
+  toast('Signed out of sync', 'success');
 }
 
-// ── push ALL local data → Firestore ──────────────────────────────
-async function fbPushAll() {
-  const user = window._fbUser;
-  if (!user) { syncLog('Not signed in', 'err'); return; }
-  try {
-    setSyncBtn('busy', 'Pushing…');
-    syncLog('Pushing all data to Firestore…', 'info');
-    const { db, doc, setDoc } = window._FB;
-    const payload = {
-      daily:   dailyData,
-      lending: lendingData,
-      gold:    goldData,
-      yearly:  yearlyData,
-      updatedAt: new Date().toISOString(),
-      device: navigator.userAgent.substring(0,80)
-    };
-    await setDoc(doc(db, 'users', user.uid, 'finance', 'data'), payload);
-    setSyncBtn('ok', 'Pushed ✓');
-    syncLog('Push complete ✓', 'ok');
-    toast('Data pushed to cloud ✓', 'success');
-  } catch(e) {
-    setSyncBtn('err', 'Push failed');
-    syncLog('Push error: ' + e.message, 'err');
-    toast('Push failed: ' + e.message, 'error');
-  }
-}
+// ── START AUTO-SYNC: listen for remote changes, push local changes ─
+function startAutoSync(uid) {
+  if (_syncUnsub) _syncUnsub(); // cancel previous listener
 
-// ── pull Firestore → local + re-render ───────────────────────────
-async function fbPullAll() {
-  const user = window._fbUser;
-  if (!user) { syncLog('Not signed in', 'err'); return; }
-  try {
-    setSyncBtn('busy', 'Pulling…');
-    syncLog('Pulling data from Firestore…', 'info');
-    const { db, doc, getDoc } = window._FB;
-    const snap = await getDoc(doc(db, 'users', user.uid, 'finance', 'data'));
-    if (!snap.exists()) { syncLog('No cloud data found — push from this device first', 'info'); setSyncBtn('ok', 'No data'); return; }
-    applyCloudData(snap.data());
-    setSyncBtn('ok', 'Pulled ✓');
-    syncLog('Pull complete ✓ — updated: ' + snap.data().updatedAt, 'ok');
-    toast('Data pulled from cloud ✓', 'success');
-  } catch(e) {
-    setSyncBtn('err', 'Pull failed');
-    syncLog('Pull error: ' + e.message, 'err');
-    toast('Pull failed: ' + e.message, 'error');
-  }
-}
+  const { db, doc, onSnapshot, setDoc } = window._FB;
+  const docRef = doc(db, 'users', uid, 'finance', 'data');
 
-// ── live real-time listener ───────────────────────────────────────
-function startLiveSync(uid) {
-  if (_syncUnsub) _syncUnsub();
-  const { db, doc, onSnapshot } = window._FB;
-  syncLog('Starting live sync listener…', 'info');
-  _syncUnsub = onSnapshot(
-    doc(db, 'users', uid, 'finance', 'data'),
+  // Firestore real-time listener — fires immediately on connect with latest data,
+  // then again whenever another device writes
+  _syncUnsub = onSnapshot(docRef,
     snap => {
-      if (!snap.exists()) return;
-      // Only auto-apply if data is newer than 30s (avoid overwriting local edits on load)
-      const d = snap.data();
-      const age = d.updatedAt ? (Date.now() - new Date(d.updatedAt).getTime()) : Infinity;
-      if (age < 30000) {
-        applyCloudData(d);
-        setSyncBtn('ok', 'Live ✓');
-        syncLog('Live update received ✓', 'ok');
+      if (!snap.exists()) {
+        // First time — no cloud data yet → push local data up
+        setSyncBtn('busy', 'First sync…');
+        setSyncStatus('busy', '⏳ First time setup — uploading your data…');
+        _writeToFirestore(uid);
+        return;
+      }
+
+      const cloud = snap.data();
+      const cloudTime = cloud.updatedAt ? new Date(cloud.updatedAt).getTime() : 0;
+      const localTime = _lastSyncTime ? _lastSyncTime.getTime() : 0;
+
+      if (cloudTime > localTime && !_syncPending) {
+        // Cloud is newer (another device wrote) → pull it in silently
+        _applyCloudData(cloud);
+        _lastSyncTime = new Date(cloud.updatedAt);
+        updateLastSyncLabel();
+        setSyncBtn('ok', '● Live');
+        setSyncStatus('ok', '✓ Auto-sync active — all devices are in sync');
+        const dev = cloud.device ? ` (from ${cloud.device.substring(0,30)}…)` : '';
+        toast('Synced from another device ✓' + dev, 'success');
       } else {
-        setSyncBtn('ok', 'Connected');
-        syncLog('Connected to Firestore (data in sync)', 'ok');
+        // Already in sync
+        _lastSyncTime = _lastSyncTime || new Date();
+        updateLastSyncLabel();
+        setSyncBtn('ok', '● Live');
+        setSyncStatus('ok', '✓ Auto-sync active — all devices are in sync');
       }
     },
     err => {
       setSyncBtn('err', 'Sync err');
-      syncLog('Live sync error: ' + err.message, 'err');
+      setSyncStatus('err', '✗ Sync error — ' + err.message);
     }
   );
 }
 
-// ── apply cloud payload → memory + localStorage + re-render ──────
-function applyCloudData(d) {
-  if (d.daily   && Array.isArray(d.daily))   { dailyData   = d.daily;   LS.set(KEYS.daily,   dailyData);fbAutoSync();   }
-  if (d.lending && Array.isArray(d.lending)) { lendingData = d.lending; LS.set(KEYS.lending, lendingData);fbAutoSync(); }
-  if (d.gold    && Array.isArray(d.gold))    { goldData    = d.gold;    LS.set(KEYS.gold,    goldData);fbAutoSync();    }
-  if (d.yearly  && Array.isArray(d.yearly))  { yearlyData  = d.yearly;  LS.set(KEYS_Y,       yearlyData);fbAutoSync();  }
+// ── WRITE to Firestore (debounced 1.5s) ──────────────────────────
+let _writeTimer = null;
+function fbAutoSync() {
+  if (!window._fbUser || !window._FB?.configured) return;
+  clearTimeout(_writeTimer);
+  setSyncBtn('busy', 'Saving…');
+  _writeTimer = setTimeout(() => _writeToFirestore(window._fbUser.uid), 1500);
+}
+
+async function _writeToFirestore(uid) {
+  _syncPending = true;
+  try {
+    const { db, doc, setDoc } = window._FB;
+    await setDoc(doc(db, 'users', uid, 'finance', 'data'), {
+      daily:     dailyData,
+      lending:   lendingData,
+      gold:      goldData,
+      yearly:    yearlyData,
+      updatedAt: new Date().toISOString(),
+      device:    navigator.userAgent.substring(0, 60)
+    });
+    _lastSyncTime = new Date();
+    updateLastSyncLabel();
+    setSyncBtn('ok', '● Live');
+    setSyncStatus('ok', '✓ Auto-sync active — all devices are in sync');
+  } catch(e) {
+    setSyncBtn('err', 'Save err');
+    setSyncStatus('err', '✗ Save failed — ' + e.message);
+    toast('Sync save failed: ' + e.message, 'error');
+  } finally {
+    _syncPending = false;
+  }
+}
+
+// ── apply incoming cloud data → memory + localStorage + re-render ─
+function _applyCloudData(d) {
+  // Write to localStorage WITHOUT triggering fbAutoSync (avoid echo loop)
+  if (d.daily   && Array.isArray(d.daily))   { dailyData   = d.daily;   localStorage.setItem(KEYS.daily,   JSON.stringify(dailyData));   }
+  if (d.lending && Array.isArray(d.lending)) { lendingData = d.lending; localStorage.setItem(KEYS.lending, JSON.stringify(lendingData)); }
+  if (d.gold    && Array.isArray(d.gold))    { goldData    = d.gold;    localStorage.setItem(KEYS.gold,    JSON.stringify(goldData));    }
+  if (d.yearly  && Array.isArray(d.yearly))  { yearlyData  = d.yearly;  localStorage.setItem(KEYS_Y,       JSON.stringify(yearlyData));  }
   renderDailyTable();
   renderMonthlyView();
   updateMonthlyStats();
@@ -2378,43 +2388,34 @@ function applyCloudData(d) {
   updateInvStats();
 }
 
-// ── auto-push helper (called after every local save) ─────────────
-function fbAutoSync() {
-  if (!window._fbUser || !window._FB.configured) return;
-  clearTimeout(window._fbSyncTimer);
-  window._fbSyncTimer = setTimeout(() => {
-    setSyncBtn('busy', 'Syncing…');
-    fbPushAll();
-  }, 1500); // debounce 1.5s
-}
-
-// ── modal open/close ─────────────────────────────────────────────
+// ── modal open/close ──────────────────────────────────────────────
 function openSyncModal() {
   const modal = document.getElementById('sync-modal');
   if (!modal) return;
 
-  // Config badge
   const badge = document.getElementById('sm-config-badge');
   if (badge) {
     badge.innerHTML = window._FB?.configured
       ? '<div class="sm-badge ok">✓ Firebase configured</div>'
       : '<div class="sm-badge bad">⚠ Firebase not configured — see setup guide below</div>';
   }
-
-  // Setup guide
   const setup = document.getElementById('sm-setup');
   if (setup) setup.style.display = window._FB?.configured ? 'none' : 'block';
 
-  // Auth state
   const user = window._fbUser;
-  document.getElementById('sm-guest').style.display = (!window._FB?.configured || !user) ? 'block' : 'none';
-  document.getElementById('sm-user').style.display  = (window._FB?.configured && user)  ? 'block' : 'none';
+  const guestEl = document.getElementById('sm-guest');
+  const userEl  = document.getElementById('sm-user');
+  if (guestEl) guestEl.style.display = (!window._FB?.configured || !user) ? 'block' : 'none';
+  if (userEl)  userEl.style.display  = (window._FB?.configured && user)   ? 'block' : 'none';
   if (user) {
-    document.getElementById('sm-avatar').src = user.photoURL || '';
-    document.getElementById('sm-uname').textContent = user.displayName || 'User';
-    document.getElementById('sm-email').textContent = user.email || '';
+    const av = document.getElementById('sm-avatar');
+    const un = document.getElementById('sm-uname');
+    const em = document.getElementById('sm-email');
+    if (av) av.src = user.photoURL || '';
+    if (un) un.textContent = user.displayName || 'User';
+    if (em) em.textContent = user.email || '';
   }
-
+  updateLastSyncLabel();
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -2461,12 +2462,13 @@ document.getElementById('sync-modal')?.addEventListener('click', e => {
           <div class="sm-email" id="sm-email">—</div>
         </div>
       </div>
-      <div class="sm-actions">
-        <button class="btn-push" onclick="fbPushAll()">⬆ Push to Cloud</button>
-        <button class="btn-pull" onclick="fbPullAll()">⬇ Pull from Cloud</button>
+      <div id="sm-sync-status" class="sm-sync-status ok">
+        ✓ Auto-sync active — changes save instantly across all devices
+      </div>
+      <div class="sm-last-sync">Last synced: <span id="sm-last-sync-time">—</span></div>
+      <div style="margin-top:12px">
         <button class="btn-signout" onclick="fbSignOut()">Sign out</button>
       </div>
-      <div class="sm-log" id="sm-log-user"></div>
     </div>
 
     <!-- setup guide (shown when not configured) -->
