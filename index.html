@@ -33,11 +33,44 @@
 }
 /* ── LIGHT THEME ─────────────────────────────────────── */
 [data-theme="light"]{
-  --gold:#a07800; --gold-l:#c9a84c; --gold-dim:rgba(160,120,0,.1); --gold-b:rgba(160,120,0,.28);
-  --bg:#f5f3ee; --bg2:#ffffff; --bg3:#efecea; --bg4:#e4e1db; --bg5:#d8d4cc;
-  --text:#1a1714; --dim:#6b6050; --muted:#a09080;
-  --green:#2d7a4f; --red:#c0392b; --blue:#1a5fa8; --pur:#6d4e9e; --teal:#1a8a80; --org:#c05c1a;
+  /* Accent — vivid indigo replaces gold in light mode */
+  --gold:#4f46e5; --gold-l:#6366f1; --gold-dim:rgba(79,70,229,.08); --gold-b:rgba(79,70,229,.2);
+  /* Backgrounds — pure white surface stack */
+  --bg:#f0f2f5; --bg2:#ffffff; --bg3:#f7f8fa; --bg4:#eceef2; --bg5:#e2e5eb;
+  /* Typography */
+  --text:#0f172a; --dim:#475569; --muted:#94a3b8;
+  /* Semantic */
+  --green:#059669; --red:#dc2626; --blue:#2563eb; --pur:#7c3aed; --teal:#0891b2; --org:#ea580c;
+  /* Chart accent colour (used in pr-f gradient) */
+  --chart-a:#4f46e5; --chart-b:#818cf8;
 }
+/* Light-mode specific overrides */
+[data-theme="light"] .app-name{ color:var(--gold); }
+[data-theme="light"] .yr-lbl{ color:var(--gold); }
+[data-theme="light"] .kv{ color:var(--gold); }
+[data-theme="light"] .tg{ color:var(--gold); }
+[data-theme="light"] .card{ box-shadow:0 1px 4px rgba(0,0,0,.06); }
+[data-theme="light"] .kpi{ box-shadow:0 1px 3px rgba(0,0,0,.05); }
+[data-theme="light"] nav button.active{ color:var(--gold); border-bottom-color:var(--gold); }
+[data-theme="light"] .mtab.active{ background:var(--gold); color:#fff; border-color:var(--gold); }
+[data-theme="light"] .btn-gold{ background:var(--gold); color:#fff; }
+[data-theme="light"] .btn-gold:hover{ background:var(--gold-l); }
+[data-theme="light"] .fab{ background:linear-gradient(135deg,var(--gold),var(--gold-l)); color:#fff; }
+[data-theme="light"] .badge.bo{ background:rgba(79,70,229,.1); color:var(--gold); }
+[data-theme="light"] .pr-f{ background:linear-gradient(90deg,#4f46e5,#818cf8); }
+[data-theme="light"] .sec::before{ background:var(--gold); }
+[data-theme="light"] .mk.done{ background:rgba(5,150,105,.12); border-color:rgba(5,150,105,.35); color:var(--green); }
+[data-theme="light"] header{ border-bottom-color:rgba(79,70,229,.15); }
+[data-theme="light"] nav{ border-bottom-color:rgba(79,70,229,.15); }
+[data-theme="light"] .logo-row img{ border-color:rgba(79,70,229,.2); }
+[data-theme="light"] .yr-sw{ background:#f0f2f5; border-color:rgba(79,70,229,.2); }
+[data-theme="light"] .theme-btn{ background:#f0f2f5; border-color:rgba(79,70,229,.2); }
+[data-theme="light"] .upload-hdr-btn{ background:#f0f2f5; border-color:rgba(79,70,229,.2); }
+[data-theme="light"] .lcard{ background:var(--bg3); }
+[data-theme="light"] .ltag{ background:var(--bg4); }
+[data-theme="light"] .ttot td{ background:var(--bg3); color:var(--gold); }
+[data-theme="light"] .sync-dot{ background:var(--green); }
+[data-theme="light"] .sync-dot.off{ background:var(--red); }
 /* ── THEME SWITCHER BUTTON ───────────────────────────── */
 .theme-btn{
   display:flex;align-items:center;justify-content:center;
@@ -429,8 +462,7 @@ tr:hover td{background:var(--gold-dim);}
       <div class="kg c3" id="port-kpis" style="margin-bottom:12px;"></div>
       <div class="card">
         <div class="card-title">Asset Allocation</div>
-        <div class="ch h220"><canvas id="cPort"></canvas></div>
-        <div class="pl" id="port-legend"></div>
+        <div id="port-bar-chart" style="margin-top:4px;"></div>
       </div>
       <div class="card" style="padding:0;overflow:hidden;">
         <div style="padding:12px 14px 8px;display:flex;justify-content:space-between;align-items:center;">
@@ -1167,25 +1199,34 @@ function renderPortfolio() {
 }
 
 function drawPortChart(portData, total) {
-  const labels=[], vals=[], pcts=[], colors=COLORS.slice();
-  ASSET_KEYS.forEach((k,i) => { const v = portData[k]||0; if(v>0){labels.push(ASSET_LABELS[i]);vals.push(v);pcts.push(total>0?(v/total*100):0);} });
-  destroyChart('cPort');
-  const legend = document.getElementById('port-legend');
-  legend.innerHTML = '';
-  if (!vals.length) return;
-  // Horizontal bar chart styled like savings rate
+  const labels=[], vals=[], pcts=[];
+  ASSET_KEYS.forEach((k,i) => {
+    const v = portData[k]||0;
+    if(v>0){ labels.push(ASSET_LABELS[i]); vals.push(v); pcts.push(total>0?(v/total*100):0); }
+  });
+
+  const wrap = document.getElementById('port-bar-chart');
+  wrap.innerHTML = '';
+  if (!vals.length) { wrap.innerHTML='<div class="empty">No data. Tap Edit.</div>'; return; }
+
+  // Build colour ramp — vivid multi-colour palette
+  const BCOLS = ['#4f46e5','#059669','#dc2626','#ea580c','#0891b2','#7c3aed','#d97706','#0284c7','#be185d','#16a34a'];
+
+  // Sort descending by value for better visual
+  const sorted = labels.map((l,i)=>({l,v:vals[i],p:pcts[i],c:BCOLS[i%BCOLS.length]}))
+                        .sort((a,b)=>b.v-a.v);
+
   let html = '';
-  labels.forEach((l,i) => {
-    html += `<div class="pr-row">
-      <div class="pr-l" style="min-width:88px;font-size:11px;">${l}</div>
-      <div class="pr-bar"><div class="pr-f" style="width:${pcts[i].toFixed(1)}%;background:${colors[i]};"></div></div>
-      <div class="pr-p" style="min-width:48px;font-size:10px;">${pcts[i].toFixed(1)}%</div>
+  sorted.forEach(item => {
+    html += `<div class="pr-row" style="margin-bottom:10px;">
+      <div class="pr-l" style="min-width:90px;font-size:11px;color:var(--text);">${item.l}</div>
+      <div class="pr-bar" style="height:7px;">
+        <div style="height:100%;border-radius:4px;width:${item.p.toFixed(1)}%;background:${item.c};transition:width .6s ease;"></div>
+      </div>
+      <div style="min-width:64px;text-align:right;font-size:11px;color:var(--dim);">${item.p.toFixed(1)}% <span style="color:var(--text);font-weight:500;">${fmtK(item.v)}</span></div>
     </div>`;
   });
-  // Replace canvas with div bars — hide canvas
-  const canvas = document.getElementById('cPort');
-  canvas.style.display = 'none';
-  legend.innerHTML = html;
+  wrap.innerHTML = html;
 }
 
 function drawBalChart(available) {
@@ -1777,9 +1818,19 @@ function toggleTheme() {
   html.setAttribute('data-theme', next);
   localStorage.setItem('aha-theme', next);
   document.getElementById('theme-btn').textContent = next === 'light' ? '🌙' : '☀️';
-  // Redraw charts with new colours
+  applyChartTheme(next);
   renderDashboard();
   renderPortfolio();
+}
+
+function applyChartTheme(theme) {
+  if (theme === 'light') {
+    Chart.defaults.color = '#475569';
+    Chart.defaults.borderColor = 'rgba(79,70,229,.1)';
+  } else {
+    Chart.defaults.color = '#8a8070';
+    Chart.defaults.borderColor = 'rgba(201,168,76,.1)';
+  }
 }
 
 function applyStoredTheme() {
@@ -1787,6 +1838,7 @@ function applyStoredTheme() {
   document.documentElement.setAttribute('data-theme', t);
   const btn = document.getElementById('theme-btn');
   if (btn) btn.textContent = t === 'light' ? '🌙' : '☀️';
+  applyChartTheme(t);
 }
 
 // ── CHART REGISTRY ───────────────────────────────────
