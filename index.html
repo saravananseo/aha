@@ -915,7 +915,8 @@ tr:hover td{background:var(--gold-dim);}
 <!-- ── Add Gold Loan ── -->
 <div class="overlay" id="glModal">
 <div class="modal">
-  <div class="modal-head"><div class="modal-title">Add Gold Loan</div><button class="close-btn" onclick="closeModal('glModal')">✕</button></div>
+  <div class="modal-head"><div class="modal-title" id="glModal-title">Add Gold Loan</div><button class="close-btn" onclick="closeModal('glModal')">✕</button></div>
+  <input type="hidden" id="gl-edit-id">
   <div class="fg">
     <div class="frow"><label>Loan Number</label><input type="text" id="gl-loanno" placeholder="e.g. GL-001"></div>
     <div class="frow"><label>Given Date (DD-MM-YYYY)</label><input type="date" id="gl-date"></div>
@@ -925,7 +926,7 @@ tr:hover td{background:var(--gold-dim);}
     <div class="frow"><label>Rate (%/month)</label><input type="number" id="gl-rate" placeholder="1.5" step="0.01" value="1.5"></div>
   </div>
   <div class="frow"><label>Notes</label><input type="text" id="gl-notes" placeholder="Optional"></div>
-  <button class="btn btn-gold" onclick="saveGL()">Add Gold Loan</button>
+  <button class="btn btn-gold" id="gl-save-btn" onclick="saveGL()">Add Gold Loan</button>
   <button class="btn btn-ghost" onclick="closeModal('glModal')">Cancel</button>
 </div></div>
 
@@ -1604,6 +1605,7 @@ function renderInvest() {
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
             <span class="badge ${isClosed?'br':'bo'}">${g.status||'Active'}</span>
+            <button class="btn-sm" onclick="openEditGL('${g.id}')">✏️ Edit</button>
             ${!isClosed ? `<button class="btn-sm" onclick="openCloseGL('${g.id}')">Close Loan</button>` : ''}
             <button class="icon-btn del" onclick="deleteGL('${g.id}')">🗑</button>
           </div>
@@ -1621,7 +1623,22 @@ function renderInvest() {
 }
 
 // ── Gold Loan CRUD ────────────────────────────────────
+function openEditGL(id) {
+  const gl = D.gl.find(g => g.id === id);
+  if (!gl) return;
+  document.getElementById('gl-edit-id').value = id;
+  document.getElementById('gl-loanno').value  = gl.loanNo || '';
+  document.getElementById('gl-date').value    = fmtDateISO(parseDateStr(gl.date));
+  document.getElementById('gl-capital').value = gl.capital || '';
+  document.getElementById('gl-rate').value    = gl.rate || 1.5;
+  document.getElementById('gl-notes').value   = gl.notes || '';
+  document.getElementById('glModal-title').textContent = 'Edit Gold Loan';
+  document.getElementById('gl-save-btn').textContent   = 'Save Changes';
+  openModal('glModal');
+}
+
 async function saveGL() {
+  const editId   = document.getElementById('gl-edit-id').value;
   const dateISO2 = document.getElementById('gl-date').value;
   const capital  = parseFloat(document.getElementById('gl-capital').value) || 0;
   const rate     = parseFloat(document.getElementById('gl-rate').value) || 1.5;
@@ -1630,9 +1647,20 @@ async function saveGL() {
   if (!dateISO2 || !capital) { toast('Enter date and capital'); return; }
   const date     = fmtDate(dateISO2);  // store as DD-MM-YYYY
   try {
-    await globalCol('gl').add({ date, capital, rate, notes, loanNo, status: 'Active', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    if (editId) {
+      // Edit mode — update only the editable fields, preserve status/releaseDate etc.
+      await globalCol('gl').doc(editId).update({ date, capital, rate, notes, loanNo });
+      toast('Gold Loan updated ✓');
+    } else {
+      // Add mode
+      await globalCol('gl').add({ date, capital, rate, notes, loanNo, status: 'Active', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      toast('Gold Loan added ✓');
+    }
+    // Reset modal to Add mode
+    document.getElementById('gl-edit-id').value = '';
+    document.getElementById('glModal-title').textContent = 'Add Gold Loan';
+    document.getElementById('gl-save-btn').textContent   = 'Add Gold Loan';
     closeModal('glModal');
-    toast('Gold Loan added ✓');
   } catch(e) { toast('Error: '+e.message); }
 }
 
@@ -1960,7 +1988,17 @@ function closeModal(id) { document.getElementById(id).classList.remove('show'); 
 
 // Close modal on backdrop click
 document.querySelectorAll('.overlay').forEach(o => {
-  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('show'); });
+  o.addEventListener('click', e => {
+    if (e.target === o) {
+      o.classList.remove('show');
+      // Reset GL modal to Add mode if dismissed
+      if (o.id === 'glModal') {
+        document.getElementById('gl-edit-id').value = '';
+        document.getElementById('glModal-title').textContent = 'Add Gold Loan';
+        document.getElementById('gl-save-btn').textContent   = 'Add Gold Loan';
+      }
+    }
+  });
 });
 
 function clearForm(modalId) {
