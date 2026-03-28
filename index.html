@@ -31,6 +31,21 @@
   --green:#52b788; --red:#e05555; --blue:#5b9bd5; --pur:#9b7ecb; --teal:#4ecdc4; --org:#f4a261;
   --r:14px; --sb:env(safe-area-inset-bottom,0px); --st:env(safe-area-inset-top,0px);
 }
+/* ── LIGHT THEME ─────────────────────────────────────── */
+[data-theme="light"]{
+  --gold:#a07800; --gold-l:#c9a84c; --gold-dim:rgba(160,120,0,.1); --gold-b:rgba(160,120,0,.28);
+  --bg:#f5f3ee; --bg2:#ffffff; --bg3:#efecea; --bg4:#e4e1db; --bg5:#d8d4cc;
+  --text:#1a1714; --dim:#6b6050; --muted:#a09080;
+  --green:#2d7a4f; --red:#c0392b; --blue:#1a5fa8; --pur:#6d4e9e; --teal:#1a8a80; --org:#c05c1a;
+}
+/* ── THEME SWITCHER BUTTON ───────────────────────────── */
+.theme-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:32px;height:32px;border-radius:8px;
+  background:var(--bg3);border:1px solid var(--gold-b);
+  cursor:pointer;font-size:15px;transition:all .2s;flex-shrink:0;color:var(--text);
+}
+.theme-btn:hover{border-color:var(--gold);background:var(--gold-dim);}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow:hidden;}
 
@@ -361,6 +376,7 @@ tr:hover td{background:var(--gold-dim);}
         <button class="yr-btn" onclick="changeYear(1)">&#8250;</button>
       </div>
       <button class="upload-hdr-btn" onclick="switchTab('upload',document.querySelector('[data-tab=upload]'))" title="Bulk Upload">📂</button>
+      <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle Light/Dark">🌙</button>
       <div id="user-widget"></div>
     </div>
   </header>
@@ -444,7 +460,7 @@ tr:hover td{background:var(--gold-dim);}
       <button class="btn btn-gold" style="margin-bottom:16px;" onclick="openModal('fdModal')">+ Add Fixed Deposit</button>
 
       <div class="sec">Gold Loans</div>
-      <div class="kg c2" id="gl-kpis"></div>
+      <div class="kg c3" id="gl-kpis"></div>
       <div id="gold-loans"></div>
       <button class="btn btn-gold" style="margin-bottom:12px;" onclick="openModal('glModal')">+ Add Gold Loan</button>
     </div>
@@ -612,7 +628,7 @@ tr:hover td{background:var(--gold-dim);}
 <div class="overlay" id="fdModal">
 <div class="modal">
   <div class="modal-head"><div class="modal-title">Add Fixed Deposit</div><button class="close-btn" onclick="closeModal('fdModal')">✕</button></div>
-  <div class="frow"><label>Date</label><input type="date" id="fd-date"></div>
+  <div class="frow"><label>Date (DD-MM-YYYY)</label><input type="date" id="fd-date"></div>
   <div class="fg">
     <div class="frow"><label>Capital (₹)</label><input type="number" id="fd-capital" placeholder="500000"></div>
     <div class="frow"><label>Rate (%/month)</label><input type="number" id="fd-rate" placeholder="1.5" step="0.01" value="1.5"></div>
@@ -626,7 +642,7 @@ tr:hover td{background:var(--gold-dim);}
 <div class="overlay" id="glModal">
 <div class="modal">
   <div class="modal-head"><div class="modal-title">Add Gold Loan</div><button class="close-btn" onclick="closeModal('glModal')">✕</button></div>
-  <div class="frow"><label>Given Date</label><input type="date" id="gl-date"></div>
+  <div class="frow"><label>Given Date (DD-MM-YYYY)</label><input type="date" id="gl-date"></div>
   <div class="fg">
     <div class="frow"><label>Capital (₹)</label><input type="number" id="gl-capital" placeholder="200000"></div>
     <div class="frow"><label>Rate (%/month)</label><input type="number" id="gl-rate" placeholder="1.5" step="0.01" value="1.5"></div>
@@ -642,11 +658,11 @@ tr:hover td{background:var(--gold-dim);}
   <div class="modal-head"><div class="modal-title">Close Gold Loan</div><button class="close-btn" onclick="closeModal('glCloseModal')">✕</button></div>
   <input type="hidden" id="glc-id">
   <div id="glc-summary" style="background:var(--bg3);border:1px solid var(--gold-b);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--dim);line-height:2;"></div>
-  <div class="frow"><label>Release Date</label><input type="date" id="glc-release"></div>
-  <div class="frow"><label>Number of Months</label><input type="number" id="glc-months" placeholder="e.g. 2" min="1" oninput="calcGLClose()"></div>
+  <div class="frow"><label>Release Date</label><input type="date" id="glc-release" oninput="calcGLClose()"></div>
   <div style="background:var(--bg3);border:1px solid var(--gold-b);border-radius:8px;padding:12px;margin-bottom:14px;" id="glc-calc">
-    <div class="fb"><span style="font-size:11px;color:var(--dim);">Interest</span><span id="glc-int" style="color:var(--gold);font-weight:600;">₹0</span></div>
-    <div class="fb mt8"><span style="font-size:11px;color:var(--dim);">Total Return</span><span id="glc-tot" style="color:var(--green);font-weight:600;">₹0</span></div>
+    <div class="fb mb4"><span style="font-size:11px;color:var(--dim);">Months (auto)</span><span id="glc-months-display" style="color:var(--gold);font-weight:600;">—</span></div>
+    <div class="fb mb4"><span style="font-size:11px;color:var(--dim);">Interest</span><span id="glc-int" style="color:var(--gold);font-weight:600;">₹0</span></div>
+    <div class="fb"><span style="font-size:11px;color:var(--dim);">Total Return</span><span id="glc-tot" style="color:var(--green);font-weight:600;">₹0</span></div>
   </div>
   <button class="btn btn-gold" onclick="closeGoldLoan()">Close Loan</button>
   <button class="btn btn-ghost" onclick="closeModal('glCloseModal')">Cancel</button>
@@ -727,6 +743,7 @@ function showApp(user) {
   const w = document.getElementById('user-widget');
   if (user.photoURL) w.innerHTML = `<img class="user-avatar" src="${user.photoURL}" onclick="signOut()" title="Sign out">`;
   else { const i = (user.displayName||user.email||'U')[0].toUpperCase(); w.innerHTML = `<div class="user-initials" onclick="signOut()" title="Sign out">${i}</div>`; }
+  applyStoredTheme();
   populateSelects();
   subscribeAll();
 }
@@ -1150,17 +1167,25 @@ function renderPortfolio() {
 }
 
 function drawPortChart(portData, total) {
-  const labels=[], vals=[], colors=COLORS.slice();
-  ASSET_KEYS.forEach((k,i) => { const v = portData[k]||0; if(v>0){labels.push(ASSET_LABELS[i]);vals.push(v);} });
+  const labels=[], vals=[], pcts=[], colors=COLORS.slice();
+  ASSET_KEYS.forEach((k,i) => { const v = portData[k]||0; if(v>0){labels.push(ASSET_LABELS[i]);vals.push(v);pcts.push(total>0?(v/total*100):0);} });
   destroyChart('cPort');
   const legend = document.getElementById('port-legend');
-  if (!vals.length) { legend.innerHTML=''; return; }
-  new Chart(document.getElementById('cPort'), {
-    type:'doughnut',
-    data:{labels,datasets:[{data:vals,backgroundColor:colors.slice(0,vals.length),borderWidth:0,hoverOffset:8}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false}}}
+  legend.innerHTML = '';
+  if (!vals.length) return;
+  // Horizontal bar chart styled like savings rate
+  let html = '';
+  labels.forEach((l,i) => {
+    html += `<div class="pr-row">
+      <div class="pr-l" style="min-width:88px;font-size:11px;">${l}</div>
+      <div class="pr-bar"><div class="pr-f" style="width:${pcts[i].toFixed(1)}%;background:${colors[i]};"></div></div>
+      <div class="pr-p" style="min-width:48px;font-size:10px;">${pcts[i].toFixed(1)}%</div>
+    </div>`;
   });
-  legend.innerHTML = labels.map((l,i) => `<div class="pi"><div class="pd" style="background:${colors[i]}"></div><span>${l} <span style="color:var(--gold)">${total>0?(vals[i]/total*100).toFixed(1):0}%</span></span></div>`).join('');
+  // Replace canvas with div bars — hide canvas
+  const canvas = document.getElementById('cPort');
+  canvas.style.display = 'none';
+  legend.innerHTML = html;
 }
 
 function drawBalChart(available) {
@@ -1186,11 +1211,12 @@ function setPortMonth(m) { portMonth = m; renderPortfolio(); }
 // INVESTMENTS — FD
 // ════════════════════════════════════════════════════
 async function saveFD() {
-  const date    = document.getElementById('fd-date').value;
+  const dateISO = document.getElementById('fd-date').value;
   const capital = parseFloat(document.getElementById('fd-capital').value) || 0;
   const rate    = parseFloat(document.getElementById('fd-rate').value) || 1.5;
   const notes   = document.getElementById('fd-notes').value.trim();
-  if (!date || !capital) { toast('Enter date and capital'); return; }
+  if (!dateISO || !capital) { toast('Enter date and capital'); return; }
+  const date    = fmtDate(dateISO);  // store as DD-MM-YYYY
   const monthly = capital * (rate / 100);
   try {
     await globalCol('fd').add({ date, capital, rate, monthly, notes, marks: {}, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
@@ -1214,25 +1240,38 @@ async function deleteFD(id) {
 }
 
 function renderInvest() {
-  // FD KPIs
-  const totalCap  = D.fd.reduce((s,f) => s + (f.capital||0), 0);
-  const totalMo   = D.fd.reduce((s,f) => s + (f.monthly||0), 0);
+  // FD — sort ascending by date
+  const sortedFD = [...D.fd].sort((a,b) => {
+    // dates stored as YYYY-MM-DD or DD-MM-YYYY — normalise to compare
+    return parseDateStr(a.date) - parseDateStr(b.date);
+  });
+
+  // FD KPIs — total capital + interest received this year (marked months)
+  const totalCap = sortedFD.reduce((s,f) => s + (f.capital||0), 0);
+  let totalReceivedThisYear = 0;
+  sortedFD.forEach(fd => {
+    const marks = fd.marks || {};
+    MSHORT.forEach((_,i) => {
+      const key = `${currentYear}-m${i}`;
+      if (marks[key]) totalReceivedThisYear += (fd.monthly||0);
+    });
+  });
   document.getElementById('fd-kpis').innerHTML = `
     <div class="kpi"><div class="kl">Total Capital</div><div class="kv sm">${fmtK(totalCap)}</div></div>
-    <div class="kpi"><div class="kl">Monthly Return</div><div class="kv g">${fmtK(totalMo)}</div></div>`;
+    <div class="kpi"><div class="kl">Received ${currentYear}</div><div class="kv g sm">${fmtK(totalReceivedThisYear)}</div></div>`;
 
   // FD table
   const fdBody = document.getElementById('fd-body');
-  if (!D.fd.length) { fdBody.innerHTML = '<tr><td colspan="5" class="empty">No FDs yet. Tap + to add.</td></tr>'; }
+  if (!sortedFD.length) { fdBody.innerHTML = '<tr><td colspan="5" class="empty">No FDs yet. Tap + to add.</td></tr>'; }
   else {
-    fdBody.innerHTML = D.fd.map(fd => {
+    fdBody.innerHTML = sortedFD.map(fd => {
       const marksHTML = MSHORT.map((m,i) => {
         const key = `${currentYear}-m${i}`;
         const done = (fd.marks||{})[key];
         return `<span class="mk ${done?'done':''}" onclick="toggleFDMark('${fd.id}','${key}')" title="${m} ${currentYear}">${m[0]}</span>`;
       }).join('');
       return `<tr>
-        <td style="font-size:11px;">${fd.date}<br><span style="color:var(--muted);font-size:10px;">${fd.notes||''}</span></td>
+        <td style="font-size:11px;">${fmtDate(fd.date)}<br><span style="color:var(--muted);font-size:10px;">${fd.notes||''}</span></td>
         <td class="num">${(fd.capital||0).toLocaleString('en-IN')}</td>
         <td class="num pos">₹${(fd.monthly||0).toLocaleString('en-IN')}</td>
         <td><div class="marks">${marksHTML}</div></td>
@@ -1240,24 +1279,39 @@ function renderInvest() {
       </tr>`;
     }).join('');
   }
+  const totalMo = sortedFD.reduce((s,f) => s + (f.monthly||0), 0);
   document.getElementById('fd-total').innerHTML = `<td>Total</td><td class="num">₹${totalCap.toLocaleString('en-IN')}</td><td class="num">₹${totalMo.toLocaleString('en-IN')}/mo</td><td colspan="2"></td>`;
 
-  // Gold Loan KPIs
-  const active = D.gl.filter(g => g.status !== 'Closed');
-  const closed = D.gl.filter(g => g.status === 'Closed');
-  const actCap = active.reduce((s,g)=>s+(g.capital||0),0);
-  const totInt = closed.reduce((s,g)=>s+(g.interest||0),0);
+  // Gold Loan KPIs — active capital + interest earned (closed) + accrued (active)
+  const activeGL = D.gl.filter(g => g.status !== 'Closed');
+  const closedGL = D.gl.filter(g => g.status === 'Closed');
+  const actCap   = activeGL.reduce((s,g) => s + (g.capital||0), 0);
+  const earnedInt = closedGL.reduce((s,g) => s + calcGLMonths(g.date, g.releaseDate, g.capital, g.rate), 0);
+  const accruedInt = activeGL.reduce((s,g) => {
+    const today = fmtDateISO(new Date());
+    return s + calcGLMonths(g.date, today, g.capital, g.rate);
+  }, 0);
+
   document.getElementById('gl-kpis').innerHTML = `
     <div class="kpi"><div class="kl">Active Capital</div><div class="kv sm">${fmtK(actCap)}</div></div>
-    <div class="kpi"><div class="kl">Interest Earned</div><div class="kv g">${fmtK(totInt)}</div></div>`;
+    <div class="kpi"><div class="kl">Interest Earned</div><div class="kv g sm">${fmtK(earnedInt)}</div></div>
+    <div class="kpi"><div class="kl">Accrued (Active)</div><div class="kv sm" style="color:var(--org);">${fmtK(accruedInt)}</div></div>`;
 
-  // Gold Loan cards
-  document.getElementById('gold-loans').innerHTML = !D.gl.length ? '<div class="empty">No gold loans yet.</div>' :
-    D.gl.map(g => {
+  // Gold Loan cards — sort by date ascending
+  const sortedGL = [...D.gl].sort((a,b) => parseDateStr(a.date) - parseDateStr(b.date));
+  document.getElementById('gold-loans').innerHTML = !sortedGL.length ? '<div class="empty">No gold loans yet.</div>' :
+    sortedGL.map(g => {
       const isClosed = g.status === 'Closed';
+      const calcMonths = isClosed
+        ? calcGLMonths(g.date, g.releaseDate, g.capital, g.rate)
+        : calcGLMonths(g.date, fmtDateISO(new Date()), g.capital, g.rate);
+      const calcInterest = calcMonths * (g.capital||0) * (g.rate||1.5) / 100;
+      const numMonths = isClosed
+        ? glMonthCount(g.date, g.releaseDate)
+        : glMonthCount(g.date, fmtDateISO(new Date()));
       return `<div class="lcard">
         <div class="lt">
-          <div><div class="ld">${g.date}</div><div class="la">₹${(g.capital||0).toLocaleString('en-IN')}</div></div>
+          <div><div class="ld">${fmtDate(g.date)}</div><div class="la">₹${(g.capital||0).toLocaleString('en-IN')}</div></div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
             <span class="badge ${isClosed?'br':'bo'}">${g.status||'Active'}</span>
             ${!isClosed ? `<button class="btn-sm" onclick="openCloseGL('${g.id}')">Close Loan</button>` : ''}
@@ -1266,10 +1320,10 @@ function renderInvest() {
         </div>
         <div class="ltags">
           <span class="ltag">Rate: ${g.rate||1.5}%/mo</span>
-          ${g.months ? `<span class="ltag">${g.months} month(s)</span>` : ''}
-          ${g.interest ? `<span class="ltag">Interest: ₹${(g.interest||0).toLocaleString('en-IN')}</span>` : ''}
-          ${g.total ? `<span class="ltag">Total: ₹${(g.total||0).toLocaleString('en-IN')}</span>` : ''}
-          ${g.releaseDate ? `<span class="ltag">Released: ${g.releaseDate}</span>` : ''}
+          <span class="ltag">${numMonths} month(s)</span>
+          <span class="ltag">${isClosed?'Interest':'Accrued'}: ₹${calcInterest.toLocaleString('en-IN',{maximumFractionDigits:0})}</span>
+          ${isClosed ? `<span class="ltag">Total: ₹${((g.capital||0)+calcInterest).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>` : ''}
+          ${g.releaseDate ? `<span class="ltag">Released: ${fmtDate(g.releaseDate)}</span>` : ''}
           ${g.notes ? `<span class="ltag">${g.notes}</span>` : ''}
         </div>
       </div>`;
@@ -1278,11 +1332,12 @@ function renderInvest() {
 
 // ── Gold Loan CRUD ────────────────────────────────────
 async function saveGL() {
-  const date    = document.getElementById('gl-date').value;
-  const capital = parseFloat(document.getElementById('gl-capital').value) || 0;
-  const rate    = parseFloat(document.getElementById('gl-rate').value) || 1.5;
-  const notes   = document.getElementById('gl-notes').value.trim();
-  if (!date || !capital) { toast('Enter date and capital'); return; }
+  const dateISO2 = document.getElementById('gl-date').value;
+  const capital  = parseFloat(document.getElementById('gl-capital').value) || 0;
+  const rate     = parseFloat(document.getElementById('gl-rate').value) || 1.5;
+  const notes    = document.getElementById('gl-notes').value.trim();
+  if (!dateISO2 || !capital) { toast('Enter date and capital'); return; }
+  const date     = fmtDate(dateISO2);  // store as DD-MM-YYYY
   try {
     await globalCol('gl').add({ date, capital, rate, notes, status: 'Active', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
     closeModal('glModal');
@@ -1294,14 +1349,14 @@ function openCloseGL(id) {
   const gl = D.gl.find(g => g.id === id);
   if (!gl) return;
   document.getElementById('glc-id').value = id;
-  document.getElementById('glc-release').value = new Date().toISOString().split('T')[0];
-  document.getElementById('glc-months').value = '';
+  // default release = today in YYYY-MM-DD for input
+  const todayISO = fmtDateISO(new Date());
+  document.getElementById('glc-release').value = todayISO;
   document.getElementById('glc-summary').innerHTML = `
     <div class="fb"><span>Capital</span><span class="tg">₹${(gl.capital||0).toLocaleString('en-IN')}</span></div>
-    <div class="fb"><span>Given Date</span><span>${gl.date}</span></div>
+    <div class="fb"><span>Given Date</span><span>${fmtDate(gl.date)}</span></div>
     <div class="fb"><span>Rate</span><span>${gl.rate||1.5}%/month</span></div>`;
-  document.getElementById('glc-int').textContent = '₹0';
-  document.getElementById('glc-tot').textContent = '₹0';
+  calcGLClose();
   openModal('glCloseModal');
 }
 
@@ -1309,23 +1364,30 @@ function calcGLClose() {
   const id = document.getElementById('glc-id').value;
   const gl = D.gl.find(g => g.id === id);
   if (!gl) return;
-  const months = parseFloat(document.getElementById('glc-months').value) || 0;
-  const interest = (gl.capital||0) * (gl.rate||1.5) / 100 * months;
-  const total    = (gl.capital||0) + interest;
-  document.getElementById('glc-int').textContent = '₹' + interest.toLocaleString('en-IN');
-  document.getElementById('glc-tot').textContent = '₹' + total.toLocaleString('en-IN');
+  const releaseVal = document.getElementById('glc-release').value;
+  if (!releaseVal) return;
+  const numMonths = glMonthCount(gl.date, releaseVal);
+  const interest  = (gl.capital||0) * (gl.rate||1.5) / 100 * numMonths;
+  const total     = (gl.capital||0) + interest;
+  document.getElementById('glc-months-display').textContent = numMonths + ' month(s)';
+  document.getElementById('glc-int').textContent = '₹' + interest.toLocaleString('en-IN', {maximumFractionDigits:0});
+  document.getElementById('glc-tot').textContent = '₹' + total.toLocaleString('en-IN', {maximumFractionDigits:0});
 }
 
 async function closeGoldLoan() {
   const id          = document.getElementById('glc-id').value;
-  const releaseDate = document.getElementById('glc-release').value;
-  const months      = parseFloat(document.getElementById('glc-months').value) || 0;
-  const gl          = D.gl.find(g => g.id === id);
-  if (!gl || !releaseDate) { toast('Enter release date'); return; }
-  const interest = (gl.capital||0) * (gl.rate||1.5) / 100 * months;
-  const total    = (gl.capital||0) + interest;
+  const releaseDateISO = document.getElementById('glc-release').value;
+  const gl             = D.gl.find(g => g.id === id);
+  if (!gl || !releaseDateISO) { toast('Enter release date'); return; }
+  const releaseDate = fmtDate(releaseDateISO);  // store as DD-MM-YYYY
+  const numMonths   = glMonthCount(gl.date, releaseDateISO);
+  const interest  = (gl.capital||0) * (gl.rate||1.5) / 100 * numMonths;
+  const total     = (gl.capital||0) + interest;
   try {
-    await globalCol('gl').doc(id).update({ status:'Closed', releaseDate, months, interest, total, closedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await globalCol('gl').doc(id).update({
+      status:'Closed', releaseDate, months: numMonths, interest, total,
+      closedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
     closeModal('glCloseModal');
     toast('Loan closed ✓');
   } catch(e) { toast('Error: '+e.message); }
@@ -1649,6 +1711,85 @@ function fmtCr(v) {
   return '₹' + v.toLocaleString('en-IN');
 }
 
+// ── DATE HELPERS ─────────────────────────────────────
+// Parse date string (YYYY-MM-DD or DD-MM-YYYY) → Date object
+function parseDateStr(s) {
+  if (!s) return new Date(0);
+  s = String(s).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s);
+  if (/^\d{2}-\d{2}-\d{4}/.test(s)) {
+    const [d,m,y] = s.split('-');
+    return new Date(`${y}-${m}-${d}`);
+  }
+  return new Date(s);
+}
+
+// Format any date string or Date to DD-MM-YYYY
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = (s instanceof Date) ? s : parseDateStr(String(s));
+  if (isNaN(d)) return String(s);
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+// Date → YYYY-MM-DD string (for <input type=date>)
+function fmtDateISO(d) {
+  if (!d) return '';
+  const dt = (d instanceof Date) ? d : parseDateStr(d);
+  return dt.toISOString().split('T')[0];
+}
+
+// Gold loan month count using the specified rule:
+// DATEDIF(A,B,"M") + IF(remaining_days >= 5, 1, 0)
+function glMonthCount(givenStr, closingStr) {
+  if (!givenStr || !closingStr) return 0;
+  const A = parseDateStr(givenStr);
+  const B = parseDateStr(closingStr);
+  if (isNaN(A) || isNaN(B) || B <= A) return 0;
+
+  // Full months between A and B
+  let fullMonths = (B.getFullYear() - A.getFullYear()) * 12 + (B.getMonth() - A.getMonth());
+  if (B.getDate() < A.getDate()) fullMonths--; // not yet reached same day
+  if (fullMonths < 0) fullMonths = 0;
+
+  // Remaining days after fullMonths
+  const afterFull = new Date(A);
+  afterFull.setMonth(afterFull.getMonth() + fullMonths);
+  const remainDays = Math.round((B - afterFull) / (1000*60*60*24));
+
+  return fullMonths + (remainDays >= 5 ? 1 : 0);
+}
+
+// Calculate GL interest using month-count rule
+function calcGLMonths(givenStr, closingStr, capital, rate) {
+  const months = glMonthCount(givenStr, closingStr);
+  return months * (capital||0) * (rate||1.5) / 100;
+}
+
+// ── THEME ────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') !== 'light';
+  const next = isDark ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('aha-theme', next);
+  document.getElementById('theme-btn').textContent = next === 'light' ? '🌙' : '☀️';
+  // Redraw charts with new colours
+  renderDashboard();
+  renderPortfolio();
+}
+
+function applyStoredTheme() {
+  const t = localStorage.getItem('aha-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = t === 'light' ? '🌙' : '☀️';
+}
+
+// ── CHART REGISTRY ───────────────────────────────────
 // Chart registry
 const chartInstances = {};
 function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
@@ -1673,6 +1814,8 @@ Chart.defaults.font.size = 11;
 
 // ── SERVICE WORKER ────────────────────────────────────
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+// Apply theme immediately on script parse (before auth)
+(function(){ const t=localStorage.getItem('aha-theme')||'dark'; document.documentElement.setAttribute('data-theme',t); })();
 </script>
 
 <!-- ═══════════════════════════════════════ -->
