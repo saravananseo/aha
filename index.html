@@ -266,6 +266,62 @@ tr:hover td{background:var(--gold-dim);}
 .empty{text-align:center;color:var(--muted);font-size:12px;padding:28px 16px;}
 .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);margin-left:4px;display:inline-block;}
 .sync-dot.off{background:var(--red);}
+
+/* ── UPLOAD BUTTON ───────────────────────────────────── */
+.upload-hdr-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:32px;height:32px;border-radius:8px;
+  background:var(--bg3);border:1px solid var(--gold-b);
+  cursor:pointer;font-size:15px;transition:all .2s;flex-shrink:0;
+}
+.upload-hdr-btn:hover{border-color:var(--gold);background:var(--gold-dim);}
+
+/* ── UPLOAD TAB STYLES ───────────────────────────────── */
+.upload-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.utype-card{
+  background:var(--bg3);border:2px solid var(--gold-b);border-radius:12px;
+  padding:14px 12px;cursor:pointer;transition:all .22s;text-align:center;
+}
+.utype-card:hover{border-color:var(--gold);background:var(--gold-dim);}
+.utype-card.selected{border-color:var(--gold);background:var(--gold-dim);}
+.utype-icon{font-size:22px;margin-bottom:6px;}
+.utype-label{font-size:12px;font-weight:500;color:var(--text);}
+.utype-desc{font-size:10px;color:var(--dim);margin-top:2px;}
+
+.upload-zone{
+  border:2px dashed var(--gold-b);border-radius:var(--r);padding:28px 20px;
+  text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px;
+  position:relative;
+}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--gold);background:var(--gold-dim);}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon-big{font-size:32px;margin-bottom:10px;}
+.upload-main-txt{font-size:13px;color:var(--text);font-weight:500;margin-bottom:4px;}
+.upload-sub-txt{font-size:11px;color:var(--dim);}
+
+.format-box{background:var(--bg3);border:1px solid var(--gold-b);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+.format-box-title{font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:600;}
+.format-row{font-size:10px;color:var(--dim);margin-bottom:4px;line-height:1.5;}
+.format-col{display:inline-block;background:var(--bg4);border-radius:4px;padding:1px 6px;margin:1px;font-family:monospace;font-size:10px;color:var(--text);}
+
+.preview-wrap{max-height:220px;overflow-y:auto;border:1px solid var(--gold-b);border-radius:8px;margin-bottom:14px;}
+.preview-wrap::-webkit-scrollbar{width:2px;}
+.preview-wrap::-webkit-scrollbar-thumb{background:var(--gold-b);}
+.preview-stats{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.pstat{background:var(--bg3);border:1px solid var(--gold-b);border-radius:8px;padding:7px 12px;font-size:11px;}
+.pstat-val{font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--gold);font-weight:600;display:block;}
+
+.progress-bar-wrap{background:var(--bg3);border:1px solid var(--gold-b);border-radius:10px;padding:14px;margin-bottom:14px;display:none;}
+.progress-bar-track{height:6px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-top:8px;}
+.progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-l));border-radius:3px;transition:width .3s;width:0%;}
+.progress-label{font-size:11px;color:var(--dim);display:flex;justify-content:space-between;margin-top:6px;}
+
+.upload-history{margin-top:4px;}
+.uhist-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px;}
+.uhist-row:last-child{border-bottom:none;}
+.uhist-label{color:var(--text);}
+.uhist-meta{color:var(--dim);font-size:10px;margin-top:2px;}
+.uhist-badge{font-size:10px;padding:2px 8px;border-radius:20px;}
 </style>
 </head>
 <body>
@@ -301,6 +357,7 @@ tr:hover td{background:var(--gold-dim);}
         <div class="yr-lbl" id="hdr-year">2026</div>
         <button class="yr-btn" onclick="changeYear(1)">&#8250;</button>
       </div>
+      <button class="upload-hdr-btn" onclick="switchTab('upload',document.querySelector('[data-tab=upload]'))" title="Bulk Upload">📂</button>
       <div id="user-widget"></div>
     </div>
   </header>
@@ -311,6 +368,7 @@ tr:hover td{background:var(--gold-dim);}
     <button onclick="switchTab('monthly',this)">Monthly</button>
     <button onclick="switchTab('portfolio',this)">Portfolio</button>
     <button onclick="switchTab('invest',this)">Invest</button>
+    <button data-tab="upload" onclick="switchTab('upload',this)">📂 Upload</button>
   </nav>
 
   <div id="content">
@@ -387,6 +445,95 @@ tr:hover td{background:var(--gold-dim);}
       <div id="gold-loans"></div>
       <button class="btn btn-gold" style="margin-bottom:12px;" onclick="openModal('glModal')">+ Add Gold Loan</button>
     </div>
+
+    <!-- ═══ UPLOAD ═══ -->
+    <div class="tab" id="tab-upload">
+      <div class="sec">Bulk Upload from Excel</div>
+
+      <!-- Step 1: Type selector -->
+      <div class="card">
+        <div class="card-title">Step 1 — What are you uploading?</div>
+        <div class="upload-type-grid">
+          <div class="utype-card selected" id="ut-daily" onclick="selectUploadType('daily')">
+            <div class="utype-icon">📅</div>
+            <div class="utype-label">Daily Entries</div>
+            <div class="utype-desc">Income &amp; expenses by day</div>
+          </div>
+          <div class="utype-card" id="ut-portfolio" onclick="selectUploadType('portfolio')">
+            <div class="utype-icon">📊</div>
+            <div class="utype-label">Portfolio</div>
+            <div class="utype-desc">Monthly asset values</div>
+          </div>
+          <div class="utype-card" id="ut-fd" onclick="selectUploadType('fd')">
+            <div class="utype-icon">🏦</div>
+            <div class="utype-label">Fixed Deposits</div>
+            <div class="utype-desc">FD list with capital &amp; rate</div>
+          </div>
+          <div class="utype-card" id="ut-goldloan" onclick="selectUploadType('goldloan')">
+            <div class="utype-icon">🪙</div>
+            <div class="utype-label">Gold Loans</div>
+            <div class="utype-desc">Loan ledger with status</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Year -->
+      <div class="card">
+        <div class="card-title">Step 2 — Target Year</div>
+        <div class="frow" style="margin:0;">
+          <label>Year (data will be saved into this year)</label>
+          <input type="number" id="ul-year" placeholder="2025" min="2000" max="2099" style="max-width:140px;">
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:7px;">FD &amp; Gold Loans are global across years. Year applies to Daily &amp; Portfolio only.</div>
+      </div>
+
+      <!-- Step 3: File drop -->
+      <div class="card">
+        <div class="card-title">Step 3 — Choose File</div>
+        <div class="upload-zone" id="upload-zone"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="handleDrop(event)">
+          <input type="file" id="file-input" accept=".xlsx,.xls" onchange="handleFileSelect(event)">
+          <div class="upload-icon-big">📂</div>
+          <div class="upload-main-txt">Tap to choose .xlsx file</div>
+          <div class="upload-sub-txt">or drag &amp; drop here</div>
+        </div>
+
+        <!-- Column format reference -->
+        <div class="format-box" id="format-box">
+          <div class="format-box-title" id="format-title">📋 Column Format — Daily Entries</div>
+          <div id="format-cols"></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:8px;">Row 1 = header (will be skipped automatically). Each row after = one entry.</div>
+        </div>
+      </div>
+
+      <!-- Step 4: Preview + import -->
+      <div id="preview-area" style="display:none;">
+        <div class="card">
+          <div class="card-title">Step 4 — Preview &amp; Confirm</div>
+          <div class="preview-stats" id="preview-stats"></div>
+          <div class="preview-wrap">
+            <table id="preview-table" style="font-size:11px;"></table>
+          </div>
+          <div class="progress-bar-wrap" id="progress-wrap">
+            <div style="font-size:12px;color:var(--dim);" id="progress-label-txt">Importing…</div>
+            <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
+            <div class="progress-label"><span id="prog-done">0 rows</span><span id="prog-pct">0%</span></div>
+          </div>
+          <button class="btn btn-gold" id="import-btn" onclick="confirmUpload()">⬆ Import to Firebase</button>
+          <button class="btn btn-ghost" onclick="clearUpload()">✕ Clear &amp; Start Over</button>
+        </div>
+      </div>
+
+      <!-- Upload history (session) -->
+      <div class="card">
+        <div class="card-title">Session Upload Log</div>
+        <div class="upload-history" id="upload-history-list">
+          <div class="empty" style="padding:16px;">No uploads yet this session.</div>
+        </div>
+      </div>
+    </div><!-- /upload tab -->
 
   </div><!-- /content -->
 
@@ -502,38 +649,7 @@ tr:hover td{background:var(--gold-dim);}
   <button class="btn btn-ghost" onclick="closeModal('glCloseModal')">Cancel</button>
 </div></div>
 
-<!-- ── Bulk Upload ── -->
-<div class="overlay" id="uploadModal">
-<div class="modal">
-  <div class="modal-head"><div class="modal-title">Bulk Upload (.xlsx)</div><button class="close-btn" onclick="closeModal('uploadModal')">✕</button></div>
-  <div class="frow"><label>Year</label><input type="number" id="ul-year" placeholder="2025" min="2000" max="2099"></div>
-  <div class="frow"><label>Data Type</label>
-    <select id="ul-type">
-      <option value="daily">Daily Entries</option>
-      <option value="portfolio">Portfolio (Monthly Assets)</option>
-      <option value="fd">Fixed Deposits</option>
-      <option value="goldloan">Gold Loans</option>
-    </select>
-  </div>
-  <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
-    <div class="upload-icon">📂</div>
-    <div class="upload-txt">Tap to choose file or drag & drop</div>
-    <div class="upload-hint">Excel .xlsx · same column format as cf.xlsx</div>
-  </div>
-  <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none;" onchange="handleFileSelect(event)">
-  <div id="preview-area" style="display:none;">
-    <div style="font-size:11px;color:var(--dim);margin-bottom:6px;" id="preview-count"></div>
-    <div class="preview-wrap"><table id="preview-table" style="font-size:11px;"></table></div>
-    <button class="btn btn-gold" onclick="confirmUpload()">Import to Firebase</button>
-    <button class="btn btn-ghost" onclick="clearUpload()">Clear</button>
-  </div>
-  <div style="font-size:10px;color:var(--muted);margin-top:10px;line-height:1.7;">
-    <strong style="color:var(--dim);">Daily format:</strong> Day | Income | Expense | Salary | Interest | Dividend | Hedging | OtherInc | Food | Cloths | Medical | Travel | Education | Rent | OtherExp | Note | Month(1–12)<br>
-    <strong style="color:var(--dim);">Portfolio format:</strong> Month(1–12) | Bank | Hand | Gold | Stock | USD | EPF | Land | NPA | AmazonPay | GoldLoan<br>
-    <strong style="color:var(--dim);">FD format:</strong> Date(YYYY-MM-DD) | Capital | Rate<br>
-    <strong style="color:var(--dim);">Gold Loan format:</strong> GivenDate | Capital | Rate | ReleaseDate(opt) | Months(opt) | Status(Active/Closed)
-  </div>
-</div></div>
+<!-- ── Bulk Upload is now a full tab (📂 Upload in nav) ── -->
 
 <script>
 // ════════════════════════════════════════════════════
@@ -546,7 +662,6 @@ tr:hover td{background:var(--gold-dim);}
 // ════════════════════════════════════════════════════
 
 // ── REPLACE WITH YOUR FIREBASE CONFIG ───────────────
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDn_xEGexA556-Ed-HrHHVqkdSWiG3qA-Q",
   authDomain: "aha-finance-a280d.firebaseapp.com",
@@ -689,10 +804,11 @@ function switchTab(id, btn) {
   // Show/hide FAB
   const fab = document.getElementById('fab');
   fab.className = 'fab' + (['daily','portfolio','invest'].includes(id) ? '' : ' fab-hidden');
-  if (id === 'daily') renderDailyTab();
-  if (id === 'monthly') renderMonthlyTab();
+  if (id === 'daily')     renderDailyTab();
+  if (id === 'monthly')   renderMonthlyTab();
   if (id === 'portfolio') renderPortfolio();
-  if (id === 'invest') renderInvest();
+  if (id === 'invest')    renderInvest();
+  if (id === 'upload')    initUploadTab();
 }
 
 function fabClick() {
@@ -1222,7 +1338,51 @@ async function deleteGL(id) {
 // BULK UPLOAD
 // ════════════════════════════════════════════════════
 let uploadParsed = [];
-let uploadType   = '';
+let uploadType   = 'daily';
+const uploadHistory = [];
+
+// Format definitions for each type
+const FORMAT_DEFS = {
+  daily: {
+    title: '📋 Column Format — Daily Entries',
+    cols: ['Day (1-31)','Income ₹','Expense ₹','Salary','Interest','Dividend','Hedging','OtherInc','Food','Cloths','Medical','Travel','Education','Rent','OtherExp','Note','Month (1-12)']
+  },
+  portfolio: {
+    title: '📋 Column Format — Portfolio',
+    cols: ['Month (1-12)','Bank ₹','Hand Cash ₹','Gold ₹','Stock/REIT ₹','USD ₹','EPF ₹','Land ₹','NPA ₹','Amazon Pay ₹','Gold Loan ₹']
+  },
+  fd: {
+    title: '📋 Column Format — Fixed Deposits',
+    cols: ['Date (YYYY-MM-DD)','Capital ₹','Rate (%/mo)','Notes (opt)']
+  },
+  goldloan: {
+    title: '📋 Column Format — Gold Loans',
+    cols: ['Given Date (YYYY-MM-DD)','Capital ₹','Rate (%/mo)','Release Date (opt)','Months (opt)','Status (Active/Closed)']
+  }
+};
+
+function selectUploadType(type) {
+  uploadType = type;
+  // Update card selection UI
+  ['daily','portfolio','fd','goldloan'].forEach(t => {
+    document.getElementById('ut-'+t).classList.toggle('selected', t === type);
+  });
+  // Update format box
+  const def = FORMAT_DEFS[type];
+  document.getElementById('format-title').textContent = def.title;
+  document.getElementById('format-cols').innerHTML = def.cols.map((c,i) =>
+    `<span class="format-col">${i+1}. ${c}</span>`
+  ).join(' ');
+  // Clear any existing preview
+  clearUpload();
+}
+
+function initUploadTab() {
+  // Set default year to current
+  document.getElementById('ul-year').value = currentYear;
+  // Render initial format
+  selectUploadType('daily');
+}
 
 function handleDrop(e) {
   e.preventDefault();
@@ -1238,17 +1398,17 @@ function handleFileSelect(e) {
 
 function processXLSX(file) {
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = (ev) => {
     try {
-      const wb   = XLSX.read(e.target.result, { type: 'array', cellDates: true });
-      const type = document.getElementById('ul-type').value;
-      uploadType = type;
+      const wb    = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-      // Skip header row
-      const data = rows.slice(1).filter(r => r.some(c => c !== ''));
-      uploadParsed = parseUpload(type, data);
-      showPreview(uploadParsed, type);
+      const data  = rows.slice(1).filter(r => r.some(c => c !== ''));
+      uploadParsed = parseUpload(uploadType, data);
+      if (!uploadParsed.length) { toast('⚠️ No valid rows found — check column format'); return; }
+      showUploadPreview(uploadParsed, uploadType);
+      // Scroll to preview
+      setTimeout(() => document.getElementById('preview-area').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     } catch(err) { toast('Error reading file: ' + err.message); }
   };
   reader.readAsArrayBuffer(file);
@@ -1260,87 +1420,165 @@ function parseUpload(type, rows) {
       day: parseInt(r[0])||0, income: n2(r[1]), expense: n2(r[2]),
       incBreak: { salary:n2(r[3]), interest:n2(r[4]), dividend:n2(r[5]), hedging:n2(r[6]), others:n2(r[7]) },
       expBreak: { food:n2(r[8]), cloths:n2(r[9]), medical:n2(r[10]), travel:n2(r[11]), education:n2(r[12]), rent:n2(r[13]), others:n2(r[14]) },
-      note: r[15]||'', month: (parseInt(r[16])||1) - 1, pl: n2(r[1]) - n2(r[2])
-    })).filter(r => r.day > 0);
+      note: String(r[15]||''), month: (parseInt(r[16])||1) - 1, pl: n2(r[1]) - n2(r[2])
+    })).filter(r => r.day > 0 && r.day <= 31);
   }
   if (type === 'portfolio') {
-    return rows.map(r => ({ month: (parseInt(r[0])||1)-1, bank:n2(r[1]), hand:n2(r[2]), gold:n2(r[3]), stock:n2(r[4]), usd:n2(r[5]), epf:n2(r[6]), land:n2(r[7]), npa:n2(r[8]), amzn:n2(r[9]), goldloan:n2(r[10]) }));
+    return rows.map(r => ({ month:(parseInt(r[0])||1)-1, bank:n2(r[1]), hand:n2(r[2]), gold:n2(r[3]), stock:n2(r[4]), usd:n2(r[5]), epf:n2(r[6]), land:n2(r[7]), npa:n2(r[8]), amzn:n2(r[9]), goldloan:n2(r[10]) }));
   }
   if (type === 'fd') {
     return rows.map(r => {
-      const cap = n2(r[1]); const rate = parseFloat(r[2])||1.5;
-      return { date: r[0]||'', capital: cap, rate, monthly: cap*(rate/100), notes:'', marks:{} };
+      const cap = n2(r[1]), rate = parseFloat(r[2])||1.5;
+      return { date: String(r[0]||''), capital: cap, rate, monthly: +(cap*(rate/100)).toFixed(2), notes: String(r[3]||''), marks:{} };
     }).filter(r => r.date && r.capital);
   }
   if (type === 'goldloan') {
-    return rows.map(r => ({
-      date: r[0]||'', capital: n2(r[1]), rate: parseFloat(r[2])||1.5,
-      releaseDate: r[3]||'', months: n2(r[4]), status: r[5]||'Active', notes:''
-    })).map(r => { if(r.months && r.capital) { r.interest=r.capital*(r.rate/100)*r.months; r.total=r.capital+r.interest; } return r; }).filter(r => r.date && r.capital);
+    return rows.map(r => {
+      const cap = n2(r[1]), rate = parseFloat(r[2])||1.5, months = n2(r[4]);
+      const status = String(r[5]||'Active');
+      const interest = months && cap ? +(cap*(rate/100)*months).toFixed(2) : 0;
+      return { date:String(r[0]||''), capital:cap, rate, releaseDate:String(r[3]||''), months, status, interest, total: interest ? cap+interest : 0, notes:'' };
+    }).filter(r => r.date && r.capital);
   }
   return [];
 }
 
-function showPreview(data, type) {
-  if (!data.length) { toast('No valid rows found. Check format.'); return; }
+function showUploadPreview(data, type) {
   const area = document.getElementById('preview-area');
   area.style.display = 'block';
-  document.getElementById('preview-count').textContent = `${data.length} rows ready to import`;
 
+  // Stats bar
+  let statsHTML = `<div class="pstat"><span class="pstat-val">${data.length}</span>Rows</div>`;
+  if (type === 'daily') {
+    const totInc = data.reduce((s,r)=>s+r.income,0);
+    const totExp = data.reduce((s,r)=>s+r.expense,0);
+    statsHTML += `<div class="pstat"><span class="pstat-val">${fmtK(totInc)}</span>Total Income</div>`;
+    statsHTML += `<div class="pstat"><span class="pstat-val">${fmtK(totExp)}</span>Total Expense</div>`;
+  } else if (type === 'fd') {
+    const totCap = data.reduce((s,r)=>s+r.capital,0);
+    const totMo  = data.reduce((s,r)=>s+r.monthly,0);
+    statsHTML += `<div class="pstat"><span class="pstat-val">${fmtK(totCap)}</span>Total Capital</div>`;
+    statsHTML += `<div class="pstat"><span class="pstat-val">${fmtK(totMo)}</span>/month</div>`;
+  } else if (type === 'goldloan') {
+    const totCap = data.reduce((s,r)=>s+r.capital,0);
+    const active = data.filter(r=>r.status!=='Closed').length;
+    statsHTML += `<div class="pstat"><span class="pstat-val">${fmtK(totCap)}</span>Total Capital</div>`;
+    statsHTML += `<div class="pstat"><span class="pstat-val">${active}</span>Active</div>`;
+  }
+  document.getElementById('preview-stats').innerHTML = statsHTML;
+
+  // Preview table (first 50 rows max)
   let headers = [], rows = [];
+  const preview = data.slice(0, 50);
   if (type === 'daily') {
     headers = ['Day','Month','Income','Expense','P&L','Note'];
-    rows = data.map(r => [r.day, MSHORT[r.month]||r.month, fmt(r.income), fmt(r.expense), fmt(r.pl), r.note]);
+    rows = preview.map(r => [r.day, MSHORT[r.month]||r.month, fmt(r.income), fmt(r.expense), `<span class="${r.pl>=0?'pos':'neg'}">${r.pl>=0?'+':''}${fmt(r.pl)}</span>`, r.note||'—']);
   } else if (type === 'portfolio') {
     headers = ['Month','Bank','Gold','Stock','USD','EPF','Land'];
-    rows = data.map(r => [MSHORT[r.month]||r.month, fmt(r.bank), fmt(r.gold), fmt(r.stock), fmt(r.usd), fmt(r.epf), fmt(r.land)]);
+    rows = preview.map(r => [MSHORT[r.month]||r.month, fmt(r.bank), fmt(r.gold), fmt(r.stock), fmt(r.usd), fmt(r.epf), fmt(r.land)]);
   } else if (type === 'fd') {
-    headers = ['Date','Capital','Rate','Monthly'];
-    rows = data.map(r => [r.date, fmt(r.capital), r.rate+'%', fmt(r.monthly)]);
+    headers = ['Date','Capital','Rate','Monthly Return'];
+    rows = preview.map(r => [r.date, fmt(r.capital), r.rate+'%/mo', `<span class="pos">${fmt(r.monthly)}</span>`]);
   } else if (type === 'goldloan') {
-    headers = ['Given Date','Capital','Rate','Status','Release Date'];
-    rows = data.map(r => [r.date, fmt(r.capital), r.rate+'%', r.status, r.releaseDate||'—']);
+    headers = ['Date','Capital','Rate','Status','Release','Interest'];
+    rows = preview.map(r => [r.date, fmt(r.capital), r.rate+'%/mo', `<span class="badge ${r.status==='Closed'?'br':'bo'}">${r.status}</span>`, r.releaseDate||'—', r.interest?fmt(r.interest):'—']);
   }
 
-  const tbl = document.getElementById('preview-table');
-  tbl.innerHTML = `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  document.getElementById('preview-table').innerHTML =
+    `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+     <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>
+     ${data.length > 50 ? `<tfoot><tr><td colspan="${headers.length}" style="text-align:center;color:var(--dim);font-size:10px;padding:8px;">… and ${data.length-50} more rows</td></tr></tfoot>` : ''}`;
+
+  document.getElementById('import-btn').disabled = false;
 }
 
 async function confirmUpload() {
   if (!uploadParsed.length) return;
   const year = parseInt(document.getElementById('ul-year').value) || currentYear;
   const type = uploadType;
+  const total = uploadParsed.length;
+
+  const importBtn = document.getElementById('import-btn');
+  importBtn.disabled = true;
+  importBtn.textContent = 'Importing…';
+
+  // Show progress bar
+  const pw = document.getElementById('progress-wrap');
+  pw.style.display = 'block';
+  const fill = document.getElementById('progress-fill');
+  const progDone = document.getElementById('prog-done');
+  const progPct  = document.getElementById('prog-pct');
+
+  const setProgress = (done) => {
+    const pct = Math.round(done/total*100);
+    fill.style.width = pct + '%';
+    progDone.textContent = `${done} / ${total} rows`;
+    progPct.textContent  = pct + '%';
+  };
+  setProgress(0);
 
   try {
     setSyncDot(false);
-    toast('Uploading…');
     const BATCH_SIZE = 400;
-    const chunks = [];
-    for (let i = 0; i < uploadParsed.length; i += BATCH_SIZE) chunks.push(uploadParsed.slice(i, i+BATCH_SIZE));
+    let done = 0;
 
-    for (const chunk of chunks) {
+    for (let i = 0; i < total; i += BATCH_SIZE) {
+      const chunk = uploadParsed.slice(i, i + BATCH_SIZE);
       const batch = db.batch();
       chunk.forEach(item => {
         let ref;
-        if (type === 'daily')     ref = col('daily', year).doc();
+        if (type === 'daily')         ref = col('daily', year).doc();
         else if (type === 'portfolio') ref = col('portfolio', year).doc(`m${item.month}`);
-        else if (type === 'fd')   ref = globalCol('fd').doc();
-        else if (type === 'goldloan') ref = globalCol('gl').doc();
+        else if (type === 'fd')        ref = globalCol('fd').doc();
+        else if (type === 'goldloan')  ref = globalCol('gl').doc();
         batch.set(ref, { ...item, ts: firebase.firestore.FieldValue.serverTimestamp() });
       });
       await batch.commit();
+      done += chunk.length;
+      setProgress(done);
     }
-    closeModal('uploadModal');
-    clearUpload();
-    toast(`✓ ${uploadParsed.length} rows imported to ${year}`);
+
+    // Log to session history
+    const typeLabels = { daily:'Daily Entries', portfolio:'Portfolio', fd:'Fixed Deposits', goldloan:'Gold Loans' };
+    uploadHistory.unshift({ type: typeLabels[type]||type, count: total, year, time: new Date().toLocaleTimeString() });
+    renderUploadHistory();
+
     setSyncDot(true);
-  } catch(e) { toast('Import failed: ' + e.message); setSyncDot(true); }
+    toast(`✓ ${total} rows imported into ${year}`);
+    clearUpload();
+
+  } catch(e) {
+    toast('Import failed: ' + e.message);
+    importBtn.disabled = false;
+    importBtn.textContent = '⬆ Import to Firebase';
+    setSyncDot(true);
+  }
 }
 
 function clearUpload() {
   uploadParsed = [];
-  document.getElementById('preview-area').style.display = 'none';
-  document.getElementById('file-input').value = '';
+  const pa = document.getElementById('preview-area');
+  if (pa) pa.style.display = 'none';
+  const fi = document.getElementById('file-input');
+  if (fi) fi.value = '';
+  const pw = document.getElementById('progress-wrap');
+  if (pw) pw.style.display = 'none';
+  const ib = document.getElementById('import-btn');
+  if (ib) { ib.disabled = false; ib.textContent = '⬆ Import to Firebase'; }
+}
+
+function renderUploadHistory() {
+  const el = document.getElementById('upload-history-list');
+  if (!el) return;
+  if (!uploadHistory.length) { el.innerHTML = '<div class="empty" style="padding:16px;">No uploads yet this session.</div>'; return; }
+  el.innerHTML = uploadHistory.map(h => `
+    <div class="uhist-row">
+      <div>
+        <div class="uhist-label">${h.type} · ${h.year}</div>
+        <div class="uhist-meta">${h.time}</div>
+      </div>
+      <span class="badge bg">${h.count} rows ✓</span>
+    </div>`).join('');
 }
 
 // ════════════════════════════════════════════════════
