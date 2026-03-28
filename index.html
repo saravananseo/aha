@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#c9a84c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AHA">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>AHA Finance</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<!-- Firebase v10 modular via CDN compat shim -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<!-- Chart.js & XLSX parser -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+/* ── RESET & TOKENS ─────────────────────────────────── */
+:root{
+  --gold:#c9a84c; --gold-l:#e8c97a; --gold-dim:rgba(201,168,76,.12); --gold-b:rgba(201,168,76,.25);
+  --bg:#080808; --bg2:#101010; --bg3:#171717; --bg4:#1f1f1f; --bg5:#272727;
+  --text:#f0ead6; --dim:#8a8070; --muted:#4a4540;
+  --green:#52b788; --red:#e05555; --blue:#5b9bd5; --pur:#9b7ecb; --teal:#4ecdc4; --org:#f4a261;
+  --r:14px; --sb:env(safe-area-inset-bottom,0px); --st:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow:hidden;}
+
+/* ── LAYOUT ─────────────────────────────────────────── */
+#app{display:flex;flex-direction:column;height:100%;height:-webkit-fill-available;}
+#content{flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:calc(16px + var(--sb));}
+.tab{display:none;padding:14px;}
+.tab.active{display:block;}
+#content::-webkit-scrollbar{width:2px;}
+#content::-webkit-scrollbar-thumb{background:var(--gold-b);border-radius:2px;}
+
+/* ── HEADER ─────────────────────────────────────────── */
+header{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:10px 16px;padding-top:calc(10px + var(--st));
+  background:var(--bg2);border-bottom:1px solid var(--gold-b);flex-shrink:0;
+}
+.logo-row{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.logo-row img{width:34px;height:34px;border-radius:50%;border:1px solid var(--gold-b);}
+.app-name{font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:600;color:var(--gold);letter-spacing:2px;}
+.app-sub{font-size:10px;color:var(--dim);letter-spacing:.8px;}
+.hdr-right{display:flex;align-items:center;gap:8px;}
+
+/* Year switcher */
+.yr-sw{display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--gold-b);border-radius:8px;padding:3px 8px;}
+.yr-btn{background:none;border:none;color:var(--dim);cursor:pointer;font-size:16px;line-height:1;padding:1px 3px;transition:color .2s;}
+.yr-btn:hover{color:var(--gold);}
+.yr-lbl{font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;color:var(--gold);min-width:40px;text-align:center;}
+
+/* User avatar */
+.user-avatar{width:30px;height:30px;border-radius:50%;cursor:pointer;border:1px solid var(--gold-b);object-fit:cover;}
+.user-initials{width:30px;height:30px;border-radius:50%;background:var(--gold-dim);border:1px solid var(--gold-b);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--gold);cursor:pointer;}
+
+/* ── NAV ─────────────────────────────────────────────── */
+nav{display:flex;background:var(--bg2);border-bottom:1px solid var(--gold-b);flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
+nav::-webkit-scrollbar{display:none;}
+nav button{
+  flex:1;min-width:68px;padding:9px 4px;background:none;border:none;cursor:pointer;
+  font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.7px;
+  border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap;
+}
+nav button.active{color:var(--gold);border-bottom-color:var(--gold);}
+
+/* ── CARDS ───────────────────────────────────────────── */
+.card{background:var(--bg2);border:1px solid var(--gold-b);border-radius:var(--r);padding:14px;margin-bottom:12px;}
+.card-title{font-family:'Cormorant Garamond',serif;font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:12px;}
+
+/* ── KPI ─────────────────────────────────────────────── */
+.kg{display:grid;gap:8px;margin-bottom:12px;}
+.kg.c2{grid-template-columns:1fr 1fr;}
+.kg.c3{grid-template-columns:1fr 1fr 1fr;}
+.kpi{background:var(--bg3);border:1px solid var(--gold-b);border-radius:10px;padding:11px 10px;text-align:center;}
+.kl{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.9px;margin-bottom:3px;}
+.kv{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:var(--gold);line-height:1.1;}
+.kv.g{color:var(--green);} .kv.r{color:var(--red);} .kv.sm{font-size:13px;}
+
+/* ── SECTION HEADER ──────────────────────────────────── */
+.sec{display:flex;align-items:center;gap:8px;font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--gold-l);margin:16px 0 10px;padding-bottom:5px;border-bottom:1px solid var(--gold-b);}
+.sec::before{content:'';width:3px;height:14px;background:var(--gold);border-radius:2px;flex-shrink:0;}
+
+/* ── TABLE ───────────────────────────────────────────── */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{padding:7px 9px;text-align:left;font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);border-bottom:1px solid var(--gold-b);background:var(--bg3);white-space:nowrap;}
+td{padding:7px 9px;border-bottom:1px solid rgba(255,255,255,.03);white-space:nowrap;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--gold-dim);}
+.ttot td{background:var(--bg3);font-weight:600;color:var(--gold);border-top:1px solid var(--gold-b);}
+.num{text-align:right;font-variant-numeric:tabular-nums;}
+.pos{color:var(--green);} .neg{color:var(--red);}
+
+/* ── BADGE ───────────────────────────────────────────── */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500;}
+.bg{background:rgba(82,183,136,.15);color:var(--green);}
+.br{background:rgba(224,85,85,.15);color:var(--red);}
+.bo{background:var(--gold-dim);color:var(--gold);}
+
+/* ── CHARTS ──────────────────────────────────────────── */
+.ch{position:relative;margin-top:6px;}
+.ch.h180{height:180px;} .ch.h200{height:200px;} .ch.h220{height:220px;}
+
+/* ── PROGRESS ────────────────────────────────────────── */
+.pr-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.pr-l{font-size:11px;color:var(--dim);min-width:76px;}
+.pr-bar{flex:1;height:5px;background:var(--bg5);border-radius:3px;overflow:hidden;}
+.pr-f{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--gold),var(--gold-l));}
+.pr-p{font-size:11px;color:var(--dim);min-width:38px;text-align:right;}
+
+/* ── MONTH TABS ──────────────────────────────────────── */
+.mtabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:12px;padding-bottom:2px;}
+.mtabs::-webkit-scrollbar{display:none;}
+.mtab{flex-shrink:0;padding:5px 11px;border-radius:20px;border:1px solid var(--gold-b);background:none;color:var(--dim);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;}
+.mtab.active{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:600;}
+
+/* ── PIE LEGEND ──────────────────────────────────────── */
+.pl{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;}
+.pi{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--dim);}
+.pd{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+
+/* ── MODALS ──────────────────────────────────────────── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100;align-items:flex-end;justify-content:center;backdrop-filter:blur(5px);}
+.overlay.show{display:flex;}
+.modal{
+  background:var(--bg2);border:1px solid var(--gold-b);
+  border-radius:var(--r) var(--r) 0 0;
+  width:100%;max-width:500px;max-height:92vh;overflow-y:auto;
+  padding:20px 18px calc(20px + var(--sb));
+  animation:slideUp .28s cubic-bezier(.4,0,.2,1);
+}
+@keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.modal-title{font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gold);}
+.close-btn{background:none;border:none;color:var(--dim);font-size:22px;cursor:pointer;padding:2px 6px;line-height:1;}
+.close-btn:hover{color:var(--text);}
+
+/* ── FORMS ───────────────────────────────────────────── */
+.frow{margin-bottom:11px;}
+.frow label{display:block;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;}
+.frow input,.frow select,.frow textarea{
+  width:100%;background:var(--bg3);border:1px solid var(--gold-b);border-radius:8px;
+  color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 12px;outline:none;
+  transition:border-color .2s;appearance:none;
+}
+.frow input:focus,.frow select:focus{border-color:var(--gold);}
+.frow select option{background:var(--bg3);}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.fg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.sub-label{font-size:10px;color:var(--muted);margin-bottom:3px;display:block;}
+
+/* ── BUTTONS ─────────────────────────────────────────── */
+.btn{width:100%;padding:12px;border-radius:10px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all .2s;letter-spacing:.3px;}
+.btn-gold{background:var(--gold);color:var(--bg);}
+.btn-gold:hover{background:var(--gold-l);}
+.btn-ghost{background:none;border:1px solid var(--gold-b);color:var(--dim);margin-top:8px;}
+.btn-ghost:hover{border-color:var(--gold);color:var(--gold);}
+.btn-danger{background:rgba(224,85,85,.12);border:1px solid rgba(224,85,85,.3);color:var(--red);}
+.btn-danger:hover{background:rgba(224,85,85,.22);}
+.btn-sm{padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid var(--gold-b);background:none;color:var(--dim);cursor:pointer;transition:all .2s;font-family:'DM Sans',sans-serif;}
+.btn-sm:hover,.btn-sm.act{border-color:var(--gold);color:var(--gold);}
+.btn-sm.done{background:rgba(82,183,136,.15);border-color:rgba(82,183,136,.4);color:var(--green);}
+.icon-btn{background:none;border:none;cursor:pointer;color:var(--dim);padding:4px 6px;font-size:14px;transition:color .2s;border-radius:4px;}
+.icon-btn:hover{color:var(--gold);}
+.icon-btn.del:hover{color:var(--red);}
+
+/* ── FAB ─────────────────────────────────────────────── */
+.fab{
+  position:fixed;bottom:calc(22px + var(--sb));right:18px;
+  width:50px;height:50px;border-radius:50%;
+  background:linear-gradient(135deg,var(--gold),var(--gold-l));
+  border:none;cursor:pointer;font-size:22px;
+  box-shadow:0 4px 20px rgba(201,168,76,.4);
+  display:flex;align-items:center;justify-content:center;
+  z-index:10;transition:transform .2s,box-shadow .2s;color:var(--bg);
+}
+.fab:hover{transform:scale(1.08);}
+.fab:active{transform:scale(.94);}
+.fab-hidden{display:none;}
+
+/* ── LOAN CARD ───────────────────────────────────────── */
+.lcard{background:var(--bg3);border:1px solid var(--gold-b);border-radius:10px;padding:12px;margin-bottom:8px;}
+.lt{display:flex;justify-content:space-between;align-items:flex-start;}
+.la{font-family:'Cormorant Garamond',serif;font-size:19px;color:var(--gold);font-weight:600;}
+.ld{font-size:11px;color:var(--dim);}
+.ltags{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;}
+.ltag{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--bg4);color:var(--dim);}
+
+/* ── FD MONTH MARKS ──────────────────────────────────── */
+.marks{display:flex;gap:3px;flex-wrap:wrap;}
+.mk{
+  width:20px;height:20px;border-radius:4px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:600;transition:all .15s;flex-shrink:0;
+  border:1px solid var(--bg5);background:var(--bg5);color:var(--muted);
+}
+.mk.done{background:rgba(82,183,136,.2);border-color:rgba(82,183,136,.4);color:var(--green);}
+.mk:hover{border-color:var(--gold)!important;color:var(--gold)!important;}
+
+/* ── UPLOAD ZONE ─────────────────────────────────────── */
+.upload-zone{
+  border:2px dashed var(--gold-b);border-radius:var(--r);padding:24px;text-align:center;
+  cursor:pointer;transition:all .2s;margin-bottom:12px;
+}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--gold);background:var(--gold-dim);}
+.upload-icon{font-size:28px;margin-bottom:8px;}
+.upload-txt{font-size:12px;color:var(--dim);}
+.upload-hint{font-size:10px;color:var(--muted);margin-top:4px;}
+
+/* ── PREVIEW TABLE ───────────────────────────────────── */
+.preview-wrap{max-height:240px;overflow-y:auto;border:1px solid var(--gold-b);border-radius:8px;margin-bottom:12px;}
+.preview-wrap::-webkit-scrollbar{width:2px;}
+.preview-wrap::-webkit-scrollbar-thumb{background:var(--gold-b);}
+
+/* ── LOGIN SCREEN ────────────────────────────────────── */
+#login-screen{
+  position:fixed;inset:0;background:var(--bg);z-index:200;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;
+}
+.login-logo{margin-bottom:16px;}
+.login-logo img{width:72px;height:72px;border-radius:50%;border:2px solid var(--gold-b);}
+.login-title{font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:600;color:var(--gold);letter-spacing:3px;margin-bottom:4px;}
+.login-sub{font-size:12px;color:var(--dim);margin-bottom:40px;letter-spacing:.5px;}
+.google-btn{
+  display:flex;align-items:center;gap:12px;
+  background:var(--bg2);border:1px solid var(--gold-b);border-radius:12px;
+  padding:14px 24px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;
+  color:var(--text);transition:all .25s;width:100%;max-width:280px;justify-content:center;
+}
+.google-btn:hover{border-color:var(--gold);background:var(--gold-dim);}
+.google-btn svg{width:20px;height:20px;flex-shrink:0;}
+.login-note{font-size:10px;color:var(--muted);margin-top:20px;text-align:center;max-width:260px;line-height:1.6;}
+
+/* ── LOADING ─────────────────────────────────────────── */
+#loading{
+  position:fixed;inset:0;background:var(--bg);z-index:300;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+}
+.spin{width:32px;height:32px;border:2px solid var(--gold-b);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#loading.hidden{display:none;}
+
+/* ── TOAST ───────────────────────────────────────────── */
+.toast{
+  position:fixed;bottom:calc(80px + var(--sb));left:50%;transform:translateX(-50%);
+  background:var(--bg3);border:1px solid var(--gold-b);border-radius:8px;
+  padding:8px 18px;font-size:12px;color:var(--text);z-index:400;
+  opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;
+}
+.toast.show{opacity:1;}
+
+/* ── DIVIDER ─────────────────────────────────────────── */
+.div{height:1px;background:var(--gold-b);margin:14px 0;opacity:.35;}
+.fb{display:flex;justify-content:space-between;align-items:center;}
+.tg{color:var(--gold);}
+.chip{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:var(--bg4);font-size:11px;font-weight:600;color:var(--gold);}
+.empty{text-align:center;color:var(--muted);font-size:12px;padding:28px 16px;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);margin-left:4px;display:inline-block;}
+.sync-dot.off{background:var(--red);}
+</style>
+</head>
+<body>
+
+<!-- ══ LOADING ══ -->
+<div id="loading">
+  <div class="spin"></div>
+  <div style="font-size:12px;color:var(--dim);">Initialising AHA…</div>
+</div>
+
+<!-- ══ LOGIN ══ -->
+<div id="login-screen" style="display:none;">
+  <div class="login-logo"><img src="icon-192.png" alt="AHA"></div>
+  <div class="login-title">AHA</div>
+  <div class="login-sub">Personal Finance Tracker</div>
+  <button class="google-btn" onclick="signInGoogle()">
+    <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+    Continue with Google
+  </button>
+  <p class="login-note">Your data is private and synced securely via Firebase across all your devices.</p>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app" style="display:none;">
+  <header>
+    <div class="logo-row">
+      <img src="icon-192.png" alt="AHA">
+      <div><div class="app-name">AHA</div><div class="app-sub" id="sync-status">Finance Tracker <span class="sync-dot" id="sync-dot"></span></div></div>
+    </div>
+    <div class="hdr-right">
+      <div class="yr-sw">
+        <button class="yr-btn" onclick="changeYear(-1)">&#8249;</button>
+        <div class="yr-lbl" id="hdr-year">2026</div>
+        <button class="yr-btn" onclick="changeYear(1)">&#8250;</button>
+      </div>
+      <div id="user-widget"></div>
+    </div>
+  </header>
+
+  <nav>
+    <button class="active" onclick="switchTab('dashboard',this)">Dashboard</button>
+    <button onclick="switchTab('daily',this)">Daily</button>
+    <button onclick="switchTab('monthly',this)">Monthly</button>
+    <button onclick="switchTab('portfolio',this)">Portfolio</button>
+    <button onclick="switchTab('invest',this)">Invest</button>
+  </nav>
+
+  <div id="content">
+
+    <!-- ═══ DASHBOARD ═══ -->
+    <div class="tab active" id="tab-dashboard">
+      <div class="kg c2" id="d-kpi1"></div>
+      <div class="kg c2" id="d-kpi2"></div>
+      <div class="card"><div class="card-title">Monthly P&amp;L Trend</div><div class="ch h180"><canvas id="cPnl"></canvas></div></div>
+      <div class="card"><div class="card-title">Savings Rate by Month</div><div id="d-savings"></div></div>
+      <div class="card"><div class="card-title">YTD Expense Breakdown</div><div class="ch h200"><canvas id="cExp"></canvas></div></div>
+      <div class="card"><div class="card-title">Income Sources</div><div id="d-inc-src"></div></div>
+    </div>
+
+    <!-- ═══ DAILY ═══ -->
+    <div class="tab" id="tab-daily">
+      <div class="mtabs" id="daily-mtabs"></div>
+      <div class="kg c3" id="daily-summary" style="margin-bottom:12px;"></div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="tw"><table>
+          <thead><tr>
+            <th>Day</th><th class="num">Income</th><th class="num">Expense</th>
+            <th class="num">P&amp;L</th><th>Note</th><th></th>
+          </tr></thead>
+          <tbody id="daily-body"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ═══ MONTHLY ═══ -->
+    <div class="tab" id="tab-monthly">
+      <div class="mtabs" id="month-tabs"></div>
+      <div id="monthly-content"></div>
+    </div>
+
+    <!-- ═══ PORTFOLIO ═══ -->
+    <div class="tab" id="tab-portfolio">
+      <div class="mtabs" id="port-mtabs"></div>
+      <div class="kg c3" id="port-kpis" style="margin-bottom:12px;"></div>
+      <div class="card">
+        <div class="card-title">Asset Allocation</div>
+        <div class="ch h220"><canvas id="cPort"></canvas></div>
+        <div class="pl" id="port-legend"></div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:12px 14px 8px;display:flex;justify-content:space-between;align-items:center;">
+          <div class="card-title" style="margin:0;">Holdings</div>
+          <button class="btn-sm" onclick="openModal('portModal')">✏️ Edit</button>
+        </div>
+        <div class="tw"><table>
+          <thead><tr><th>Asset</th><th class="num">Value (₹)</th><th class="num">Share</th></tr></thead>
+          <tbody id="port-body"></tbody>
+          <tfoot><tr class="ttot" id="port-total"></tr></tfoot>
+        </table></div>
+      </div>
+      <div class="card"><div class="card-title">Balance Trend (All Months)</div><div class="ch h180"><canvas id="cBal"></canvas></div></div>
+    </div>
+
+    <!-- ═══ INVEST ═══ -->
+    <div class="tab" id="tab-invest">
+      <div class="sec">Fixed Deposits</div>
+      <div class="kg c2" id="fd-kpis"></div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="tw"><table>
+          <thead><tr><th>Date</th><th class="num">Capital</th><th class="num">₹/mo</th><th>Interest Received</th><th></th></tr></thead>
+          <tbody id="fd-body"></tbody>
+          <tfoot><tr class="ttot" id="fd-total"></tr></tfoot>
+        </table></div>
+      </div>
+      <button class="btn btn-gold" style="margin-bottom:16px;" onclick="openModal('fdModal')">+ Add Fixed Deposit</button>
+
+      <div class="sec">Gold Loans</div>
+      <div class="kg c2" id="gl-kpis"></div>
+      <div id="gold-loans"></div>
+      <button class="btn btn-gold" style="margin-bottom:12px;" onclick="openModal('glModal')">+ Add Gold Loan</button>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- ── FAB ── -->
+  <button class="fab" id="fab" onclick="fabClick()">+</button>
+
+</div><!-- /app -->
+
+<div class="toast" id="toast"></div>
+
+<!-- ════════════════ MODALS ════════════════ -->
+
+<!-- ── Add Daily Entry ── -->
+<div class="overlay" id="dailyModal">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">Daily Entry</div><button class="close-btn" onclick="closeModal('dailyModal')">✕</button></div>
+  <input type="hidden" id="d-edit-id">
+  <div class="fg">
+    <div class="frow"><label>Day</label><input type="number" id="d-day" min="1" max="31" placeholder="1–31"></div>
+    <div class="frow"><label>Month</label><select id="d-month"></select></div>
+  </div>
+  <div class="fg">
+    <div class="frow"><label>Income (₹)</label><input type="number" id="d-inc" placeholder="0" min="0" oninput="syncIncBreakdown()"></div>
+    <div class="frow"><label>Expense (₹)</label><input type="number" id="d-exp" placeholder="0" min="0" oninput="syncExpBreakdown()"></div>
+  </div>
+  <div class="frow"><label>Income Breakdown</label>
+    <div class="fg3" style="margin-top:4px;">
+      <div><span class="sub-label">Salary</span><input type="number" id="di-salary" placeholder="0" oninput="autoSumInc()"></div>
+      <div><span class="sub-label">Interest</span><input type="number" id="di-interest" placeholder="0" oninput="autoSumInc()"></div>
+      <div><span class="sub-label">Dividend</span><input type="number" id="di-dividend" placeholder="0" oninput="autoSumInc()"></div>
+      <div><span class="sub-label">Hedging</span><input type="number" id="di-hedging" placeholder="0" oninput="autoSumInc()"></div>
+      <div><span class="sub-label">Others</span><input type="number" id="di-others" placeholder="0" oninput="autoSumInc()"></div>
+    </div>
+  </div>
+  <div class="frow"><label>Expense Breakdown</label>
+    <div class="fg3" style="margin-top:4px;">
+      <div><span class="sub-label">Food</span><input type="number" id="de-food" placeholder="0" oninput="autoSumExp()"></div>
+      <div><span class="sub-label">Cloths</span><input type="number" id="de-cloths" placeholder="0" oninput="autoSumExp()"></div>
+      <div><span class="sub-label">Medical</span><input type="number" id="de-medical" placeholder="0" oninput="autoSumExp()"></div>
+      <div><span class="sub-label">Travel</span><input type="number" id="de-travel" placeholder="0" oninput="autoSumExp()"></div>
+      <div><span class="sub-label">Education</span><input type="number" id="de-education" placeholder="0" oninput="autoSumExp()"></div>
+      <div><span class="sub-label">Rent</span><input type="number" id="de-rent" placeholder="0" oninput="autoSumExp()"></div>
+      <div><span class="sub-label">Others</span><input type="number" id="de-others" placeholder="0" oninput="autoSumExp()"></div>
+    </div>
+  </div>
+  <div class="frow"><label>Note</label><input type="text" id="d-note" placeholder="Optional"></div>
+  <button class="btn btn-gold" onclick="saveDailyEntry()">Save Entry</button>
+  <button class="btn btn-ghost" onclick="closeModal('dailyModal')">Cancel</button>
+</div></div>
+
+<!-- ── Portfolio Asset Entry ── -->
+<div class="overlay" id="portModal">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">Update Asset Values</div><button class="close-btn" onclick="closeModal('portModal')">✕</button></div>
+  <div class="frow"><label>Month</label><select id="pa-month"></select></div>
+  <div class="fg">
+    <div class="frow"><label>Bank (₹)</label><input type="number" id="pa-bank" placeholder="0"></div>
+    <div class="frow"><label>Hand Cash (₹)</label><input type="number" id="pa-hand" placeholder="0"></div>
+    <div class="frow"><label>Gold (₹)</label><input type="number" id="pa-gold" placeholder="0"></div>
+    <div class="frow"><label>Stock / REIT (₹)</label><input type="number" id="pa-stock" placeholder="0"></div>
+    <div class="frow"><label>USD (₹ equiv)</label><input type="number" id="pa-usd" placeholder="0"></div>
+    <div class="frow"><label>EPF (₹)</label><input type="number" id="pa-epf" placeholder="0"></div>
+    <div class="frow"><label>Land (₹)</label><input type="number" id="pa-land" placeholder="0"></div>
+    <div class="frow"><label>NPA (₹)</label><input type="number" id="pa-npa" placeholder="0"></div>
+    <div class="frow"><label>Amazon Pay (₹)</label><input type="number" id="pa-amzn" placeholder="0"></div>
+    <div class="frow"><label>Gold Loan (₹)</label><input type="number" id="pa-goldloan" placeholder="0"></div>
+  </div>
+  <button class="btn btn-gold" onclick="savePortfolioEntry()">Save</button>
+  <button class="btn btn-ghost" onclick="closeModal('portModal')">Cancel</button>
+</div></div>
+
+<!-- ── Add FD ── -->
+<div class="overlay" id="fdModal">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">Add Fixed Deposit</div><button class="close-btn" onclick="closeModal('fdModal')">✕</button></div>
+  <div class="frow"><label>Date</label><input type="date" id="fd-date"></div>
+  <div class="fg">
+    <div class="frow"><label>Capital (₹)</label><input type="number" id="fd-capital" placeholder="500000"></div>
+    <div class="frow"><label>Rate (%/month)</label><input type="number" id="fd-rate" placeholder="1.5" step="0.01" value="1.5"></div>
+  </div>
+  <div class="frow"><label>Notes</label><input type="text" id="fd-notes" placeholder="Optional"></div>
+  <button class="btn btn-gold" onclick="saveFD()">Add FD</button>
+  <button class="btn btn-ghost" onclick="closeModal('fdModal')">Cancel</button>
+</div></div>
+
+<!-- ── Add Gold Loan ── -->
+<div class="overlay" id="glModal">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">Add Gold Loan</div><button class="close-btn" onclick="closeModal('glModal')">✕</button></div>
+  <div class="frow"><label>Given Date</label><input type="date" id="gl-date"></div>
+  <div class="fg">
+    <div class="frow"><label>Capital (₹)</label><input type="number" id="gl-capital" placeholder="200000"></div>
+    <div class="frow"><label>Rate (%/month)</label><input type="number" id="gl-rate" placeholder="1.5" step="0.01" value="1.5"></div>
+  </div>
+  <div class="frow"><label>Notes</label><input type="text" id="gl-notes" placeholder="Optional"></div>
+  <button class="btn btn-gold" onclick="saveGL()">Add Gold Loan</button>
+  <button class="btn btn-ghost" onclick="closeModal('glModal')">Cancel</button>
+</div></div>
+
+<!-- ── Close Gold Loan ── -->
+<div class="overlay" id="glCloseModal">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">Close Gold Loan</div><button class="close-btn" onclick="closeModal('glCloseModal')">✕</button></div>
+  <input type="hidden" id="glc-id">
+  <div id="glc-summary" style="background:var(--bg3);border:1px solid var(--gold-b);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--dim);line-height:2;"></div>
+  <div class="frow"><label>Release Date</label><input type="date" id="glc-release"></div>
+  <div class="frow"><label>Number of Months</label><input type="number" id="glc-months" placeholder="e.g. 2" min="1" oninput="calcGLClose()"></div>
+  <div style="background:var(--bg3);border:1px solid var(--gold-b);border-radius:8px;padding:12px;margin-bottom:14px;" id="glc-calc">
+    <div class="fb"><span style="font-size:11px;color:var(--dim);">Interest</span><span id="glc-int" style="color:var(--gold);font-weight:600;">₹0</span></div>
+    <div class="fb mt8"><span style="font-size:11px;color:var(--dim);">Total Return</span><span id="glc-tot" style="color:var(--green);font-weight:600;">₹0</span></div>
+  </div>
+  <button class="btn btn-gold" onclick="closeGoldLoan()">Close Loan</button>
+  <button class="btn btn-ghost" onclick="closeModal('glCloseModal')">Cancel</button>
+</div></div>
+
+<!-- ── Bulk Upload ── -->
+<div class="overlay" id="uploadModal">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">Bulk Upload (.xlsx)</div><button class="close-btn" onclick="closeModal('uploadModal')">✕</button></div>
+  <div class="frow"><label>Year</label><input type="number" id="ul-year" placeholder="2025" min="2000" max="2099"></div>
+  <div class="frow"><label>Data Type</label>
+    <select id="ul-type">
+      <option value="daily">Daily Entries</option>
+      <option value="portfolio">Portfolio (Monthly Assets)</option>
+      <option value="fd">Fixed Deposits</option>
+      <option value="goldloan">Gold Loans</option>
+    </select>
+  </div>
+  <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
+    <div class="upload-icon">📂</div>
+    <div class="upload-txt">Tap to choose file or drag & drop</div>
+    <div class="upload-hint">Excel .xlsx · same column format as cf.xlsx</div>
+  </div>
+  <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none;" onchange="handleFileSelect(event)">
+  <div id="preview-area" style="display:none;">
+    <div style="font-size:11px;color:var(--dim);margin-bottom:6px;" id="preview-count"></div>
+    <div class="preview-wrap"><table id="preview-table" style="font-size:11px;"></table></div>
+    <button class="btn btn-gold" onclick="confirmUpload()">Import to Firebase</button>
+    <button class="btn btn-ghost" onclick="clearUpload()">Clear</button>
+  </div>
+  <div style="font-size:10px;color:var(--muted);margin-top:10px;line-height:1.7;">
+    <strong style="color:var(--dim);">Daily format:</strong> Day | Income | Expense | Salary | Interest | Dividend | Hedging | OtherInc | Food | Cloths | Medical | Travel | Education | Rent | OtherExp | Note | Month(1–12)<br>
+    <strong style="color:var(--dim);">Portfolio format:</strong> Month(1–12) | Bank | Hand | Gold | Stock | USD | EPF | Land | NPA | AmazonPay | GoldLoan<br>
+    <strong style="color:var(--dim);">FD format:</strong> Date(YYYY-MM-DD) | Capital | Rate<br>
+    <strong style="color:var(--dim);">Gold Loan format:</strong> GivenDate | Capital | Rate | ReleaseDate(opt) | Months(opt) | Status(Active/Closed)
+  </div>
+</div></div>
+
+<script>
+// ════════════════════════════════════════════════════
+//  ██████╗ ██████╗ ███╗   ██╗███████╗██╗ ██████╗
+// ██╔════╝██╔═══██╗████╗  ██║██╔════╝██║██╔════╝
+// ██║     ██║   ██║██╔██╗ ██║█████╗  ██║██║  ███╗
+// ██║     ██║   ██║██║╚██╗██║██╔══╝  ██║██║   ██║
+// ╚██████╗╚██████╔╝██║ ╚████║██║     ██║╚██████╔╝
+//  ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝     ╚═╝ ╚═════╝
+// ════════════════════════════════════════════════════
+
+// ── REPLACE WITH YOUR FIREBASE CONFIG ───────────────
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDn_xEGexA556-Ed-HrHHVqkdSWiG3qA-Q",
+  authDomain: "aha-finance-a280d.firebaseapp.com",
+  databaseURL: "https://aha-finance-a280d-default-rtdb.firebaseio.com",
+  projectId: "aha-finance-a280d",
+  storageBucket: "aha-finance-a280d.firebasestorage.app",
+  messagingSenderId: "1077359687348",
+  appId: "1:1077359687348:web:c20b9b3446c74b25d489e1",
+  measurementId: "G-42TCYVK9KM"
+};
+// ────────────────────────────────────────────────────
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// ── STATE ────────────────────────────────────────────
+let currentYear  = new Date().getFullYear();
+let activeUser   = null;
+let activeTab    = 'dashboard';
+let dailyMonth   = new Date().getMonth();   // 0-based
+let monthlyMonth = new Date().getMonth();
+let portMonth    = new Date().getMonth();
+
+// Live data cache (refreshed per year)
+let D = { daily:{}, portfolio:{}, fd:[], gl:[] };
+let unsubs = [];  // Firestore listeners
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MSHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const COLORS  = ['#c9a84c','#e8c97a','#52b788','#5b9bd5','#9b7ecb','#4ecdc4','#f4a261','#e05555','#a8d8a8','#f7c59f'];
+
+// ── FIREBASE PATH HELPERS ────────────────────────────
+const userPath = () => `users/${activeUser.uid}`;
+const yearPath = (y) => `${userPath()}/years/${y || currentYear}`;
+const col = (name, y) => db.collection(`${yearPath(y)}/${name}`);
+const globalCol = (name) => db.collection(`${userPath()}/${name}`);
+
+// ── AUTH ─────────────────────────────────────────────
+auth.onAuthStateChanged(user => {
+  hide('loading');
+  if (user) {
+    activeUser = user;
+    showApp(user);
+  } else {
+    show('login-screen');
+  }
+});
+
+async function signInGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try { await auth.signInWithPopup(provider); }
+  catch(e) { toast('Sign-in failed: ' + e.message); }
+}
+
+function showApp(user) {
+  hide('login-screen');
+  show('app', 'flex');
+  // User widget
+  const w = document.getElementById('user-widget');
+  if (user.photoURL) w.innerHTML = `<img class="user-avatar" src="${user.photoURL}" onclick="signOut()" title="Sign out">`;
+  else { const i = (user.displayName||user.email||'U')[0].toUpperCase(); w.innerHTML = `<div class="user-initials" onclick="signOut()" title="Sign out">${i}</div>`; }
+  populateSelects();
+  subscribeAll();
+}
+
+async function signOut() {
+  if (!confirm('Sign out?')) return;
+  unsubs.forEach(u => u());
+  unsubs = [];
+  await auth.signOut();
+  show('login-screen');
+  hide('app');
+}
+
+// ── YEAR SWITCH ──────────────────────────────────────
+function changeYear(d) {
+  currentYear += d;
+  document.getElementById('hdr-year').textContent = currentYear;
+  unsubs.forEach(u => u());
+  unsubs = [];
+  D = { daily:{}, portfolio:{}, fd:[], gl:[] };
+  subscribeAll();
+}
+
+// ── FIRESTORE SUBSCRIPTIONS ──────────────────────────
+function subscribeAll() {
+  setSyncDot(false);
+
+  // Daily entries (flat collection, each doc = one entry)
+  unsubs.push(col('daily').onSnapshot(snap => {
+    D.daily = {};
+    snap.forEach(doc => { D.daily[doc.id] = { id: doc.id, ...doc.data() }; });
+    renderAll();
+    setSyncDot(true);
+  }));
+
+  // Portfolio monthly snapshots
+  unsubs.push(col('portfolio').onSnapshot(snap => {
+    D.portfolio = {};
+    snap.forEach(doc => { D.portfolio[doc.id] = { id: doc.id, ...doc.data() }; }); // doc.id = "m0"–"m11"
+    renderPortfolio();
+    renderDashboard();
+  }));
+
+  // Fixed Deposits (global — not year-scoped)
+  unsubs.push(globalCol('fd').orderBy('date').onSnapshot(snap => {
+    D.fd = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderInvest();
+  }));
+
+  // Gold Loans (global)
+  unsubs.push(globalCol('gl').orderBy('date').onSnapshot(snap => {
+    D.gl = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderInvest();
+  }));
+}
+
+function setSyncDot(on) {
+  const dot = document.getElementById('sync-dot');
+  if (dot) { dot.className = 'sync-dot' + (on ? '' : ' off'); }
+}
+
+// ── SELECTS POPULATE ─────────────────────────────────
+function populateSelects() {
+  ['d-month','pa-month'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = MONTHS.map((m,i) => `<option value="${i}">${m}</option>`).join('');
+  });
+}
+
+// ── TAB SWITCH ───────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  activeTab = id;
+  // Show/hide FAB
+  const fab = document.getElementById('fab');
+  fab.className = 'fab' + (['daily','portfolio','invest'].includes(id) ? '' : ' fab-hidden');
+  if (id === 'daily') renderDailyTab();
+  if (id === 'monthly') renderMonthlyTab();
+  if (id === 'portfolio') renderPortfolio();
+  if (id === 'invest') renderInvest();
+}
+
+function fabClick() {
+  if (activeTab === 'daily') openDailyModal();
+  else if (activeTab === 'portfolio') openPortModal();
+  else if (activeTab === 'invest') openModal('fdModal');
+}
+
+// ════════════════════════════════════════════════════
+// DAILY
+// ════════════════════════════════════════════════════
+function openDailyModal(entry) {
+  clearForm('dailyModal');
+  document.getElementById('d-month').value = dailyMonth;
+  document.getElementById('d-day').value = new Date().getDate();
+  if (entry) {
+    document.getElementById('d-edit-id').value = entry.id;
+    document.getElementById('d-day').value = entry.day;
+    document.getElementById('d-month').value = entry.month;
+    document.getElementById('d-inc').value = entry.income || 0;
+    document.getElementById('d-exp').value = entry.expense || 0;
+    const ib = entry.incBreak || {};
+    const eb = entry.expBreak || {};
+    ['salary','interest','dividend','hedging','others'].forEach(k => { const el = document.getElementById('di-'+k); if(el) el.value = ib[k]||0; });
+    ['food','cloths','medical','travel','education','rent','others'].forEach(k => { const el = document.getElementById('de-'+k); if(el) el.value = eb[k]||0; });
+    document.getElementById('d-note').value = entry.note || '';
+  }
+  openModal('dailyModal');
+}
+
+async function saveDailyEntry() {
+  const day  = parseInt(document.getElementById('d-day').value);
+  const month= parseInt(document.getElementById('d-month').value);
+  const inc  = parseFloat(document.getElementById('d-inc').value) || 0;
+  const exp  = parseFloat(document.getElementById('d-exp').value) || 0;
+  const note = document.getElementById('d-note').value.trim();
+  if (!day || day < 1 || day > 31) { toast('Enter a valid day (1–31)'); return; }
+
+  const incBreak = {
+    salary:   n('di-salary'), interest: n('di-interest'),
+    dividend: n('di-dividend'), hedging: n('di-hedging'), others: n('di-others')
+  };
+  const expBreak = {
+    food: n('de-food'), cloths: n('de-cloths'), medical: n('de-medical'),
+    travel: n('de-travel'), education: n('de-education'), rent: n('de-rent'), others: n('de-others')
+  };
+
+  const data = { day, month, income: inc, expense: exp, pl: inc - exp, note, incBreak, expBreak, ts: firebase.firestore.FieldValue.serverTimestamp() };
+  const editId = document.getElementById('d-edit-id').value;
+  try {
+    if (editId) await col('daily').doc(editId).set(data);
+    else        await col('daily').add(data);
+    closeModal('dailyModal');
+    toast('Entry saved ✓');
+  } catch(e) { toast('Error: ' + e.message); }
+}
+
+async function deleteDailyEntry(id) {
+  if (!confirm('Delete this entry?')) return;
+  await col('daily').doc(id).delete();
+  toast('Entry deleted');
+}
+
+function renderAll() {
+  renderDashboard();
+  renderDailyTab();
+  renderMonthlyTab();
+}
+
+function getDailyForMonth(m) {
+  return Object.values(D.daily).filter(e => e.month === m).sort((a,b) => a.day - b.day);
+}
+
+function renderDailyTab() {
+  // Month tabs
+  const mt = document.getElementById('daily-mtabs');
+  mt.innerHTML = MSHORT.map((m,i) => `<button class="mtab ${i===dailyMonth?'active':''}" onclick="setDailyMonth(${i})">${m}</button>`).join('');
+
+  const entries = getDailyForMonth(dailyMonth);
+  const totInc  = entries.reduce((s,e) => s + (e.income||0), 0);
+  const totExp  = entries.reduce((s,e) => s + (e.expense||0), 0);
+  const totPl   = totInc - totExp;
+
+  document.getElementById('daily-summary').innerHTML = `
+    <div class="kpi"><div class="kl">Income</div><div class="kv">${fmt(totInc)}</div></div>
+    <div class="kpi"><div class="kl">Expense</div><div class="kv r">${fmt(totExp)}</div></div>
+    <div class="kpi"><div class="kl">Profit</div><div class="kv g">${fmt(totPl)}</div></div>`;
+
+  if (!entries.length) { document.getElementById('daily-body').innerHTML = `<tr><td colspan="6" class="empty">No entries for ${MONTHS[dailyMonth]}. Tap + to add.</td></tr>`; return; }
+
+  document.getElementById('daily-body').innerHTML = entries.map(e => {
+    const plCls = e.pl >= 0 ? 'pos' : 'neg';
+    return `<tr>
+      <td><span class="chip">${e.day}</span></td>
+      <td class="num">${e.income > 0 ? fmt(e.income) : '—'}</td>
+      <td class="num neg">${e.expense > 0 ? fmt(e.expense) : '—'}</td>
+      <td class="num ${plCls}">${e.pl >= 0 ? '+' : ''}${fmt(e.pl)}</td>
+      <td style="font-size:11px;color:var(--dim);max-width:110px;overflow:hidden;text-overflow:ellipsis;">${e.note||'—'}</td>
+      <td>
+        <button class="icon-btn" onclick='openDailyModal(${JSON.stringify(e)})'>✏️</button>
+        <button class="icon-btn del" onclick="deleteDailyEntry('${e.id}')">🗑</button>
+      </td>
+    </tr>`;
+  }).join('') + `<tr class="ttot"><td>Total</td><td class="num">${fmt(totInc)}</td><td class="num neg">${fmt(totExp)}</td><td class="num pos">${fmt(totPl)}</td><td colspan="2"></td></tr>`;
+}
+
+function setDailyMonth(m) {
+  dailyMonth = m;
+  renderDailyTab();
+}
+
+// ════════════════════════════════════════════════════
+// MONTHLY
+// ════════════════════════════════════════════════════
+function renderMonthlyTab() {
+  const mt = document.getElementById('month-tabs');
+  mt.innerHTML = MSHORT.map((m,i) => `<button class="mtab ${i===monthlyMonth?'active':''}" onclick="setMonthlyMonth(${i})">${m}</button>`).join('');
+  renderMonthlyContent();
+}
+
+function setMonthlyMonth(m) { monthlyMonth = m; renderMonthlyTab(); }
+
+function getMonthAgg(m) {
+  const entries = getDailyForMonth(m);
+  const r = { income:0, expense:0, pl:0, incBreak:{salary:0,interest:0,dividend:0,hedging:0,others:0}, expBreak:{food:0,cloths:0,medical:0,travel:0,education:0,rent:0,others:0} };
+  entries.forEach(e => {
+    r.income  += e.income  || 0;
+    r.expense += e.expense || 0;
+    r.pl      += e.pl      || 0;
+    if (e.incBreak) Object.keys(r.incBreak).forEach(k => { r.incBreak[k] += e.incBreak[k]||0; });
+    if (e.expBreak) Object.keys(r.expBreak).forEach(k => { r.expBreak[k] += e.expBreak[k]||0; });
+  });
+  return r;
+}
+
+function renderMonthlyContent() {
+  const agg = getMonthAgg(monthlyMonth);
+  const savPct = agg.income > 0 ? ((agg.pl / agg.income) * 100).toFixed(1) : '0.0';
+
+  const incRows = Object.entries(agg.incBreak).filter(([,v])=>v>0)
+    .map(([k,v]) => `<tr><td style="text-transform:capitalize;">${k}</td><td class="num tg">${fmt(v)}</td></tr>`).join('');
+  const expRows = Object.entries(agg.expBreak).filter(([,v])=>v>0)
+    .map(([k,v]) => `<tr><td style="text-transform:capitalize;">${k}</td><td class="num neg">${fmt(v)}</td></tr>`).join('');
+
+  document.getElementById('monthly-content').innerHTML = `
+    <div class="kg c2">
+      <div class="kpi"><div class="kl">Income</div><div class="kv">${fmt(agg.income)}</div></div>
+      <div class="kpi"><div class="kl">Expense</div><div class="kv r">${fmt(agg.expense)}</div></div>
+    </div>
+    <div class="kg c2">
+      <div class="kpi"><div class="kl">Profit</div><div class="kv g">${fmt(agg.pl)}</div></div>
+      <div class="kpi"><div class="kl">Savings %</div><div class="kv g">${savPct}%</div></div>
+    </div>
+    ${agg.income > 0 ? `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:12px 14px 8px;"><div class="card-title" style="margin:0;">Income Breakdown</div></div>
+      <div class="tw"><table>
+        <thead><tr><th>Source</th><th class="num">Amount</th></tr></thead>
+        <tbody>${incRows||'<tr><td colspan="2" class="empty">No income breakdown data</td></tr>'}</tbody>
+        <tfoot><tr class="ttot"><td>Total</td><td class="num">${fmt(agg.income)}</td></tr></tfoot>
+      </table></div>
+    </div>` : ''}
+    ${agg.expense > 0 ? `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:12px 14px 8px;"><div class="card-title" style="margin:0;">Expense Breakdown</div></div>
+      <div class="tw"><table>
+        <thead><tr><th>Category</th><th class="num">Amount</th></tr></thead>
+        <tbody>${expRows||'<tr><td colspan="2" class="empty">No expense breakdown data</td></tr>'}</tbody>
+        <tfoot><tr class="ttot"><td>Total</td><td class="num neg">${fmt(agg.expense)}</td></tr></tfoot>
+      </table></div>
+    </div>` : ''}
+    ${!agg.income && !agg.expense ? '<div class="empty" style="padding:40px;">No entries for '+MONTHS[monthlyMonth]+'. Add from Daily tab.</div>' : ''}
+  `;
+}
+
+// ════════════════════════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════════════════════════
+function renderDashboard() {
+  // YTD aggregates
+  let ytdInc = 0, ytdExp = 0;
+  const incBreak = {salary:0,interest:0,dividend:0,hedging:0,others:0};
+  const expBreak = {food:0,cloths:0,medical:0,travel:0,education:0,rent:0,others:0};
+  for (let m = 0; m < 12; m++) {
+    const agg = getMonthAgg(m);
+    ytdInc += agg.income; ytdExp += agg.expense;
+    Object.keys(incBreak).forEach(k => incBreak[k] += agg.incBreak[k]||0);
+    Object.keys(expBreak).forEach(k => expBreak[k] += agg.expBreak[k]||0);
+  }
+  const ytdPl = ytdInc - ytdExp;
+  const savPct = ytdInc > 0 ? (ytdPl / ytdInc * 100).toFixed(1) : '0.0';
+
+  // Latest portfolio balance
+  const portMonths = Object.keys(D.portfolio).map(k => parseInt(k.replace('m',''))).sort((a,b)=>b-a);
+  const latestPort = portMonths.length ? D.portfolio[`m${portMonths[0]}`] : null;
+  const portTotal  = latestPort ? Object.values(latestPort).filter(v=>typeof v==='number').reduce((s,v)=>s+v,0) : 0;
+
+  document.getElementById('d-kpi1').innerHTML = `
+    <div class="kpi"><div class="kl">YTD Income</div><div class="kv">${fmtK(ytdInc)}</div></div>
+    <div class="kpi"><div class="kl">YTD Expense</div><div class="kv r">${fmtK(ytdExp)}</div></div>`;
+  document.getElementById('d-kpi2').innerHTML = `
+    <div class="kpi"><div class="kl">Net Profit</div><div class="kv g">${fmtK(ytdPl)}</div></div>
+    <div class="kpi"><div class="kl">Savings Rate</div><div class="kv g">${savPct}%</div></div>`;
+
+  // Savings by month
+  const months = MSHORT.filter((_,i) => getMonthAgg(i).income > 0);
+  const savData = MSHORT.map((_,i) => {
+    const a = getMonthAgg(i);
+    return a.income > 0 ? (a.pl / a.income * 100).toFixed(1) : null;
+  }).filter(v => v !== null);
+
+  let savHTML = '';
+  MSHORT.forEach((m,i) => {
+    const a = getMonthAgg(i);
+    if (!a.income) return;
+    const pct = (a.pl / a.income * 100);
+    savHTML += `<div class="pr-row"><div class="pr-l">${m}</div><div class="pr-bar"><div class="pr-f" style="width:${Math.max(0,Math.min(100,pct)).toFixed(1)}%"></div></div><div class="pr-p">${pct.toFixed(1)}%</div></div>`;
+  });
+  document.getElementById('d-savings').innerHTML = savHTML || '<div class="empty">No data yet for '+currentYear+'</div>';
+
+  // Income source bars
+  const incTotal = Object.values(incBreak).reduce((s,v)=>s+v,0);
+  let incHTML = '';
+  Object.entries(incBreak).forEach(([k,v]) => {
+    if (!v) return;
+    const pct = incTotal > 0 ? (v/incTotal*100) : 0;
+    incHTML += `<div class="pr-row"><div class="pr-l" style="text-transform:capitalize;">${k}</div><div class="pr-bar"><div class="pr-f" style="width:${pct.toFixed(1)}%"></div></div><div class="pr-p">${fmtK(v)}</div></div>`;
+  });
+  document.getElementById('d-inc-src').innerHTML = incHTML || '<div class="empty">No income data yet</div>';
+
+  // Charts
+  drawPnlChart();
+  drawExpChart(expBreak);
+}
+
+function drawPnlChart() {
+  const labels=[], incData=[], expData=[], plData=[];
+  MSHORT.forEach((m,i) => {
+    const a = getMonthAgg(i);
+    if (!a.income && !a.expense) return;
+    labels.push(m); incData.push(a.income); expData.push(a.expense); plData.push(a.pl);
+  });
+  destroyChart('cPnl');
+  if (!labels.length) { document.getElementById('cPnl').style.display='none'; return; }
+  document.getElementById('cPnl').style.display='';
+  new Chart(document.getElementById('cPnl'), {
+    type:'bar',
+    data:{ labels, datasets:[
+      {label:'Income', data:incData, backgroundColor:'rgba(201,168,76,.7)', borderRadius:4},
+      {label:'Expense', data:expData, backgroundColor:'rgba(224,85,85,.6)', borderRadius:4},
+      {label:'Profit', data:plData, type:'line', borderColor:'#52b788', backgroundColor:'rgba(82,183,136,.1)', fill:false, tension:.4, pointRadius:4, pointBackgroundColor:'#52b788', borderWidth:2}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}},
+      scales:{y:{ticks:{callback:v=>'₹'+(v/1000).toFixed(0)+'K'}}}}
+  });
+}
+
+function drawExpChart(expBreak) {
+  const labels=[], vals=[], colors=['#c9a84c','#52b788','#5b9bd5','#9b7ecb','#4ecdc4','#f4a261','#e05555'];
+  Object.entries(expBreak).forEach(([k,v],i) => { if(v>0){labels.push(k[0].toUpperCase()+k.slice(1));vals.push(v);} });
+  destroyChart('cExp');
+  if (!vals.length) return;
+  new Chart(document.getElementById('cExp'), {
+    type:'doughnut',
+    data:{ labels, datasets:[{data:vals, backgroundColor:colors.slice(0,vals.length), borderWidth:0, hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'right',labels:{boxWidth:10,font:{size:10},padding:8}}}}
+  });
+}
+
+// ════════════════════════════════════════════════════
+// PORTFOLIO
+// ════════════════════════════════════════════════════
+const ASSET_KEYS = ['bank','hand','gold','stock','usd','epf','land','npa','amzn','goldloan'];
+const ASSET_LABELS = ['Bank','Hand Cash','Gold','Stock/REIT','USD','EPF','Land','NPA','Amazon Pay','Gold Loan'];
+
+function openPortModal() {
+  // Pre-fill current month's data if exists
+  const key = `m${portMonth}`;
+  const data = D.portfolio[key] || {};
+  document.getElementById('pa-month').value = portMonth;
+  ASSET_KEYS.forEach(k => {
+    const el = document.getElementById('pa-'+k);
+    if (el) el.value = data[k] || '';
+  });
+  openModal('portModal');
+}
+
+async function savePortfolioEntry() {
+  const month = parseInt(document.getElementById('pa-month').value);
+  const data = { month, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+  ASSET_KEYS.forEach(k => { data[k] = parseFloat(document.getElementById('pa-'+k).value) || 0; });
+  try {
+    await col('portfolio').doc(`m${month}`).set(data);
+    closeModal('portModal');
+    toast('Portfolio updated ✓');
+  } catch(e) { toast('Error: '+e.message); }
+}
+
+function renderPortfolio() {
+  // Port month tabs
+  const available = Object.keys(D.portfolio).map(k => parseInt(k.replace('m',''))).sort((a,b)=>a-b);
+  const mt = document.getElementById('port-mtabs');
+  mt.innerHTML = MSHORT.map((m,i) => `<button class="mtab ${i===portMonth?'active':''}" onclick="setPortMonth(${i})">${m}</button>`).join('');
+
+  const key = `m${portMonth}`;
+  const portData = D.portfolio[key] || {};
+  const total = ASSET_KEYS.reduce((s,k) => s + (portData[k]||0), 0);
+
+  // KPIs
+  const prevMonths = Object.keys(D.portfolio).map(k=>parseInt(k.replace('m',''))).filter(m=>m<portMonth).sort((a,b)=>b-a);
+  const prevData   = prevMonths.length ? D.portfolio[`m${prevMonths[0]}`] : null;
+  const prevTotal  = prevData ? ASSET_KEYS.reduce((s,k)=>s+(prevData[k]||0),0) : 0;
+  const growth     = prevTotal > 0 ? ((total-prevTotal)/prevTotal*100).toFixed(2) : null;
+
+  document.getElementById('port-kpis').innerHTML = `
+    <div class="kpi"><div class="kl">Total</div><div class="kv sm">${fmtCr(total)}</div></div>
+    <div class="kpi"><div class="kl">Prev Month</div><div class="kv sm">${fmtCr(prevTotal)}</div></div>
+    <div class="kpi"><div class="kl">Growth</div><div class="kv sm ${growth>0?'g':growth<0?'r':''}">${growth!=null?(growth>0?'+':'')+growth+'%':'—'}</div></div>`;
+
+  // Holdings table
+  let rows = '';
+  ASSET_KEYS.forEach((k,i) => {
+    const v = portData[k] || 0;
+    if (!v && !total) return;
+    const pct = total > 0 ? (v/total*100).toFixed(1) : '0.0';
+    rows += `<tr><td>${ASSET_LABELS[i]}</td><td class="num tg">${v.toLocaleString('en-IN')}</td><td class="num">${pct}%</td></tr>`;
+  });
+  document.getElementById('port-body').innerHTML = rows || `<tr><td colspan="3" class="empty">No data for ${MONTHS[portMonth]}. Tap Edit.</td></tr>`;
+  document.getElementById('port-total').innerHTML = `<td>Total</td><td class="num">${total.toLocaleString('en-IN')}</td><td class="num">100%</td>`;
+
+  // Pie chart
+  drawPortChart(portData, total);
+  // Balance trend
+  drawBalChart(available);
+}
+
+function drawPortChart(portData, total) {
+  const labels=[], vals=[], colors=COLORS.slice();
+  ASSET_KEYS.forEach((k,i) => { const v = portData[k]||0; if(v>0){labels.push(ASSET_LABELS[i]);vals.push(v);} });
+  destroyChart('cPort');
+  const legend = document.getElementById('port-legend');
+  if (!vals.length) { legend.innerHTML=''; return; }
+  new Chart(document.getElementById('cPort'), {
+    type:'doughnut',
+    data:{labels,datasets:[{data:vals,backgroundColor:colors.slice(0,vals.length),borderWidth:0,hoverOffset:8}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false}}}
+  });
+  legend.innerHTML = labels.map((l,i) => `<div class="pi"><div class="pd" style="background:${colors[i]}"></div><span>${l} <span style="color:var(--gold)">${total>0?(vals[i]/total*100).toFixed(1):0}%</span></span></div>`).join('');
+}
+
+function drawBalChart(available) {
+  const labels=[], vals=[];
+  available.forEach(m => {
+    const p = D.portfolio[`m${m}`];
+    if (!p) return;
+    const t = ASSET_KEYS.reduce((s,k)=>s+(p[k]||0),0);
+    labels.push(MSHORT[m]); vals.push(t);
+  });
+  destroyChart('cBal');
+  if (!labels.length) return;
+  new Chart(document.getElementById('cBal'), {
+    type:'line',
+    data:{labels,datasets:[{label:'Portfolio',data:vals,borderColor:'#c9a84c',backgroundColor:'rgba(201,168,76,.08)',fill:true,tension:.4,pointRadius:5,pointBackgroundColor:'#c9a84c',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'₹'+(v/100000).toFixed(1)+'L'}}}}
+  });
+}
+
+function setPortMonth(m) { portMonth = m; renderPortfolio(); }
+
+// ════════════════════════════════════════════════════
+// INVESTMENTS — FD
+// ════════════════════════════════════════════════════
+async function saveFD() {
+  const date    = document.getElementById('fd-date').value;
+  const capital = parseFloat(document.getElementById('fd-capital').value) || 0;
+  const rate    = parseFloat(document.getElementById('fd-rate').value) || 1.5;
+  const notes   = document.getElementById('fd-notes').value.trim();
+  if (!date || !capital) { toast('Enter date and capital'); return; }
+  const monthly = capital * (rate / 100);
+  try {
+    await globalCol('fd').add({ date, capital, rate, monthly, notes, marks: {}, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    closeModal('fdModal');
+    toast('FD added ✓');
+  } catch(e) { toast('Error: '+e.message); }
+}
+
+async function toggleFDMark(id, monthKey) {
+  const fd = D.fd.find(f => f.id === id);
+  if (!fd) return;
+  const marks = { ...(fd.marks || {}) };
+  marks[monthKey] = !marks[monthKey];
+  await globalCol('fd').doc(id).update({ marks });
+}
+
+async function deleteFD(id) {
+  if (!confirm('Delete this FD?')) return;
+  await globalCol('fd').doc(id).delete();
+  toast('FD deleted');
+}
+
+function renderInvest() {
+  // FD KPIs
+  const totalCap  = D.fd.reduce((s,f) => s + (f.capital||0), 0);
+  const totalMo   = D.fd.reduce((s,f) => s + (f.monthly||0), 0);
+  document.getElementById('fd-kpis').innerHTML = `
+    <div class="kpi"><div class="kl">Total Capital</div><div class="kv sm">${fmtK(totalCap)}</div></div>
+    <div class="kpi"><div class="kl">Monthly Return</div><div class="kv g">${fmtK(totalMo)}</div></div>`;
+
+  // FD table
+  const fdBody = document.getElementById('fd-body');
+  if (!D.fd.length) { fdBody.innerHTML = '<tr><td colspan="5" class="empty">No FDs yet. Tap + to add.</td></tr>'; }
+  else {
+    fdBody.innerHTML = D.fd.map(fd => {
+      const marksHTML = MSHORT.map((m,i) => {
+        const key = `${currentYear}-m${i}`;
+        const done = (fd.marks||{})[key];
+        return `<span class="mk ${done?'done':''}" onclick="toggleFDMark('${fd.id}','${key}')" title="${m} ${currentYear}">${m[0]}</span>`;
+      }).join('');
+      return `<tr>
+        <td style="font-size:11px;">${fd.date}<br><span style="color:var(--muted);font-size:10px;">${fd.notes||''}</span></td>
+        <td class="num">${(fd.capital||0).toLocaleString('en-IN')}</td>
+        <td class="num pos">₹${(fd.monthly||0).toLocaleString('en-IN')}</td>
+        <td><div class="marks">${marksHTML}</div></td>
+        <td><button class="icon-btn del" onclick="deleteFD('${fd.id}')">🗑</button></td>
+      </tr>`;
+    }).join('');
+  }
+  document.getElementById('fd-total').innerHTML = `<td>Total</td><td class="num">₹${totalCap.toLocaleString('en-IN')}</td><td class="num">₹${totalMo.toLocaleString('en-IN')}/mo</td><td colspan="2"></td>`;
+
+  // Gold Loan KPIs
+  const active = D.gl.filter(g => g.status !== 'Closed');
+  const closed = D.gl.filter(g => g.status === 'Closed');
+  const actCap = active.reduce((s,g)=>s+(g.capital||0),0);
+  const totInt = closed.reduce((s,g)=>s+(g.interest||0),0);
+  document.getElementById('gl-kpis').innerHTML = `
+    <div class="kpi"><div class="kl">Active Capital</div><div class="kv sm">${fmtK(actCap)}</div></div>
+    <div class="kpi"><div class="kl">Interest Earned</div><div class="kv g">${fmtK(totInt)}</div></div>`;
+
+  // Gold Loan cards
+  document.getElementById('gold-loans').innerHTML = !D.gl.length ? '<div class="empty">No gold loans yet.</div>' :
+    D.gl.map(g => {
+      const isClosed = g.status === 'Closed';
+      return `<div class="lcard">
+        <div class="lt">
+          <div><div class="ld">${g.date}</div><div class="la">₹${(g.capital||0).toLocaleString('en-IN')}</div></div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+            <span class="badge ${isClosed?'br':'bo'}">${g.status||'Active'}</span>
+            ${!isClosed ? `<button class="btn-sm" onclick="openCloseGL('${g.id}')">Close Loan</button>` : ''}
+            <button class="icon-btn del" onclick="deleteGL('${g.id}')">🗑</button>
+          </div>
+        </div>
+        <div class="ltags">
+          <span class="ltag">Rate: ${g.rate||1.5}%/mo</span>
+          ${g.months ? `<span class="ltag">${g.months} month(s)</span>` : ''}
+          ${g.interest ? `<span class="ltag">Interest: ₹${(g.interest||0).toLocaleString('en-IN')}</span>` : ''}
+          ${g.total ? `<span class="ltag">Total: ₹${(g.total||0).toLocaleString('en-IN')}</span>` : ''}
+          ${g.releaseDate ? `<span class="ltag">Released: ${g.releaseDate}</span>` : ''}
+          ${g.notes ? `<span class="ltag">${g.notes}</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+}
+
+// ── Gold Loan CRUD ────────────────────────────────────
+async function saveGL() {
+  const date    = document.getElementById('gl-date').value;
+  const capital = parseFloat(document.getElementById('gl-capital').value) || 0;
+  const rate    = parseFloat(document.getElementById('gl-rate').value) || 1.5;
+  const notes   = document.getElementById('gl-notes').value.trim();
+  if (!date || !capital) { toast('Enter date and capital'); return; }
+  try {
+    await globalCol('gl').add({ date, capital, rate, notes, status: 'Active', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    closeModal('glModal');
+    toast('Gold Loan added ✓');
+  } catch(e) { toast('Error: '+e.message); }
+}
+
+function openCloseGL(id) {
+  const gl = D.gl.find(g => g.id === id);
+  if (!gl) return;
+  document.getElementById('glc-id').value = id;
+  document.getElementById('glc-release').value = new Date().toISOString().split('T')[0];
+  document.getElementById('glc-months').value = '';
+  document.getElementById('glc-summary').innerHTML = `
+    <div class="fb"><span>Capital</span><span class="tg">₹${(gl.capital||0).toLocaleString('en-IN')}</span></div>
+    <div class="fb"><span>Given Date</span><span>${gl.date}</span></div>
+    <div class="fb"><span>Rate</span><span>${gl.rate||1.5}%/month</span></div>`;
+  document.getElementById('glc-int').textContent = '₹0';
+  document.getElementById('glc-tot').textContent = '₹0';
+  openModal('glCloseModal');
+}
+
+function calcGLClose() {
+  const id = document.getElementById('glc-id').value;
+  const gl = D.gl.find(g => g.id === id);
+  if (!gl) return;
+  const months = parseFloat(document.getElementById('glc-months').value) || 0;
+  const interest = (gl.capital||0) * (gl.rate||1.5) / 100 * months;
+  const total    = (gl.capital||0) + interest;
+  document.getElementById('glc-int').textContent = '₹' + interest.toLocaleString('en-IN');
+  document.getElementById('glc-tot').textContent = '₹' + total.toLocaleString('en-IN');
+}
+
+async function closeGoldLoan() {
+  const id          = document.getElementById('glc-id').value;
+  const releaseDate = document.getElementById('glc-release').value;
+  const months      = parseFloat(document.getElementById('glc-months').value) || 0;
+  const gl          = D.gl.find(g => g.id === id);
+  if (!gl || !releaseDate) { toast('Enter release date'); return; }
+  const interest = (gl.capital||0) * (gl.rate||1.5) / 100 * months;
+  const total    = (gl.capital||0) + interest;
+  try {
+    await globalCol('gl').doc(id).update({ status:'Closed', releaseDate, months, interest, total, closedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    closeModal('glCloseModal');
+    toast('Loan closed ✓');
+  } catch(e) { toast('Error: '+e.message); }
+}
+
+async function deleteGL(id) {
+  if (!confirm('Delete this gold loan?')) return;
+  await globalCol('gl').doc(id).delete();
+  toast('Gold Loan deleted');
+}
+
+// ════════════════════════════════════════════════════
+// BULK UPLOAD
+// ════════════════════════════════════════════════════
+let uploadParsed = [];
+let uploadType   = '';
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) processXLSX(file);
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) processXLSX(file);
+}
+
+function processXLSX(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb   = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      const type = document.getElementById('ul-type').value;
+      uploadType = type;
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      // Skip header row
+      const data = rows.slice(1).filter(r => r.some(c => c !== ''));
+      uploadParsed = parseUpload(type, data);
+      showPreview(uploadParsed, type);
+    } catch(err) { toast('Error reading file: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseUpload(type, rows) {
+  if (type === 'daily') {
+    return rows.map(r => ({
+      day: parseInt(r[0])||0, income: n2(r[1]), expense: n2(r[2]),
+      incBreak: { salary:n2(r[3]), interest:n2(r[4]), dividend:n2(r[5]), hedging:n2(r[6]), others:n2(r[7]) },
+      expBreak: { food:n2(r[8]), cloths:n2(r[9]), medical:n2(r[10]), travel:n2(r[11]), education:n2(r[12]), rent:n2(r[13]), others:n2(r[14]) },
+      note: r[15]||'', month: (parseInt(r[16])||1) - 1, pl: n2(r[1]) - n2(r[2])
+    })).filter(r => r.day > 0);
+  }
+  if (type === 'portfolio') {
+    return rows.map(r => ({ month: (parseInt(r[0])||1)-1, bank:n2(r[1]), hand:n2(r[2]), gold:n2(r[3]), stock:n2(r[4]), usd:n2(r[5]), epf:n2(r[6]), land:n2(r[7]), npa:n2(r[8]), amzn:n2(r[9]), goldloan:n2(r[10]) }));
+  }
+  if (type === 'fd') {
+    return rows.map(r => {
+      const cap = n2(r[1]); const rate = parseFloat(r[2])||1.5;
+      return { date: r[0]||'', capital: cap, rate, monthly: cap*(rate/100), notes:'', marks:{} };
+    }).filter(r => r.date && r.capital);
+  }
+  if (type === 'goldloan') {
+    return rows.map(r => ({
+      date: r[0]||'', capital: n2(r[1]), rate: parseFloat(r[2])||1.5,
+      releaseDate: r[3]||'', months: n2(r[4]), status: r[5]||'Active', notes:''
+    })).map(r => { if(r.months && r.capital) { r.interest=r.capital*(r.rate/100)*r.months; r.total=r.capital+r.interest; } return r; }).filter(r => r.date && r.capital);
+  }
+  return [];
+}
+
+function showPreview(data, type) {
+  if (!data.length) { toast('No valid rows found. Check format.'); return; }
+  const area = document.getElementById('preview-area');
+  area.style.display = 'block';
+  document.getElementById('preview-count').textContent = `${data.length} rows ready to import`;
+
+  let headers = [], rows = [];
+  if (type === 'daily') {
+    headers = ['Day','Month','Income','Expense','P&L','Note'];
+    rows = data.map(r => [r.day, MSHORT[r.month]||r.month, fmt(r.income), fmt(r.expense), fmt(r.pl), r.note]);
+  } else if (type === 'portfolio') {
+    headers = ['Month','Bank','Gold','Stock','USD','EPF','Land'];
+    rows = data.map(r => [MSHORT[r.month]||r.month, fmt(r.bank), fmt(r.gold), fmt(r.stock), fmt(r.usd), fmt(r.epf), fmt(r.land)]);
+  } else if (type === 'fd') {
+    headers = ['Date','Capital','Rate','Monthly'];
+    rows = data.map(r => [r.date, fmt(r.capital), r.rate+'%', fmt(r.monthly)]);
+  } else if (type === 'goldloan') {
+    headers = ['Given Date','Capital','Rate','Status','Release Date'];
+    rows = data.map(r => [r.date, fmt(r.capital), r.rate+'%', r.status, r.releaseDate||'—']);
+  }
+
+  const tbl = document.getElementById('preview-table');
+  tbl.innerHTML = `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+}
+
+async function confirmUpload() {
+  if (!uploadParsed.length) return;
+  const year = parseInt(document.getElementById('ul-year').value) || currentYear;
+  const type = uploadType;
+
+  try {
+    setSyncDot(false);
+    toast('Uploading…');
+    const BATCH_SIZE = 400;
+    const chunks = [];
+    for (let i = 0; i < uploadParsed.length; i += BATCH_SIZE) chunks.push(uploadParsed.slice(i, i+BATCH_SIZE));
+
+    for (const chunk of chunks) {
+      const batch = db.batch();
+      chunk.forEach(item => {
+        let ref;
+        if (type === 'daily')     ref = col('daily', year).doc();
+        else if (type === 'portfolio') ref = col('portfolio', year).doc(`m${item.month}`);
+        else if (type === 'fd')   ref = globalCol('fd').doc();
+        else if (type === 'goldloan') ref = globalCol('gl').doc();
+        batch.set(ref, { ...item, ts: firebase.firestore.FieldValue.serverTimestamp() });
+      });
+      await batch.commit();
+    }
+    closeModal('uploadModal');
+    clearUpload();
+    toast(`✓ ${uploadParsed.length} rows imported to ${year}`);
+    setSyncDot(true);
+  } catch(e) { toast('Import failed: ' + e.message); setSyncDot(true); }
+}
+
+function clearUpload() {
+  uploadParsed = [];
+  document.getElementById('preview-area').style.display = 'none';
+  document.getElementById('file-input').value = '';
+}
+
+// ════════════════════════════════════════════════════
+// FORM AUTO-SUM HELPERS
+// ════════════════════════════════════════════════════
+function autoSumInc() {
+  const keys = ['salary','interest','dividend','hedging','others'];
+  const sum  = keys.reduce((s,k) => s + n(('di-'+k)), 0);
+  document.getElementById('d-inc').value = sum || '';
+}
+function autoSumExp() {
+  const keys = ['food','cloths','medical','travel','education','rent','others'];
+  const sum  = keys.reduce((s,k) => s + n('de-'+k), 0);
+  document.getElementById('d-exp').value = sum || '';
+}
+
+// ════════════════════════════════════════════════════
+// MODAL / TOAST / UTIL
+// ════════════════════════════════════════════════════
+function openModal(id)  { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// Close modal on backdrop click
+document.querySelectorAll('.overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('show'); });
+});
+
+function clearForm(modalId) {
+  document.querySelectorAll(`#${modalId} input, #${modalId} select, #${modalId} textarea`).forEach(el => {
+    if (el.type !== 'hidden') { el.value = el.tagName === 'SELECT' ? el.options[0]?.value : ''; }
+  });
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function show(id, display='block') { const el=document.getElementById(id); if(el) el.style.display=display; }
+function hide(id) { const el=document.getElementById(id); if(el) el.style.display='none'; }
+
+// Number helpers
+function n(id) { return parseFloat(document.getElementById(id)?.value) || 0; }
+function n2(v) { const x=parseFloat(v); return isNaN(x)?0:x; }
+
+// Format helpers
+function fmt(v) {
+  if (!v && v !== 0) return '—';
+  return '₹' + Math.abs(v).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+}
+function fmtK(v) {
+  if (!v) return '₹0';
+  if (Math.abs(v) >= 100000) return '₹' + (v/100000).toFixed(2) + 'L';
+  if (Math.abs(v) >= 1000)   return '₹' + (v/1000).toFixed(1)   + 'K';
+  return '₹' + v.toLocaleString('en-IN');
+}
+function fmtCr(v) {
+  if (!v) return '₹0';
+  if (Math.abs(v) >= 10000000) return '₹' + (v/10000000).toFixed(2) + 'Cr';
+  if (Math.abs(v) >= 100000)   return '₹' + (v/100000).toFixed(2) + 'L';
+  return '₹' + v.toLocaleString('en-IN');
+}
+
+// Chart registry
+const chartInstances = {};
+function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
+const _orig = Chart.prototype.constructor;
+const _Chart = Chart;
+// Wrap new Chart to track instances
+const origChart = window.Chart;
+window.Chart = function(ctx, cfg) {
+  const id = typeof ctx === 'string' ? ctx : ctx.id;
+  if (chartInstances[id]) { chartInstances[id].destroy(); }
+  const instance = new origChart(ctx, cfg);
+  if (id) chartInstances[id] = instance;
+  return instance;
+};
+Object.assign(window.Chart, origChart);
+window.Chart.prototype = origChart.prototype;
+
+Chart.defaults.color = '#8a8070';
+Chart.defaults.borderColor = 'rgba(201,168,76,.1)';
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.font.size = 11;
+
+// ── SERVICE WORKER ────────────────────────────────────
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+</script>
+
+<!-- ═══════════════════════════════════════ -->
+<!--  📘  FIREBASE SETUP INSTRUCTIONS        -->
+<!-- ═══════════════════════════════════════ -->
+<!--
+╔══════════════════════════════════════════════════════════╗
+║         AHA FINANCE — FIREBASE SETUP GUIDE              ║
+╠══════════════════════════════════════════════════════════╣
+║                                                          ║
+║  STEP 1 — Create Firebase Project                        ║
+║  ─────────────────────────────────                       ║
+║  1. Go to https://console.firebase.google.com            ║
+║  2. Click "Add project"                                  ║
+║  3. Name it "aha-finance" (or anything you prefer)       ║
+║  4. Disable Google Analytics (not needed)                ║
+║  5. Click "Create project"                               ║
+║                                                          ║
+║  STEP 2 — Register Web App                               ║
+║  ─────────────────────────                               ║
+║  1. In Project Overview, click the </> (Web) icon        ║
+║  2. App nickname: "AHA Web"                              ║
+║  3. Do NOT enable Firebase Hosting (optional)            ║
+║  4. Click "Register app"                                 ║
+║  5. COPY the firebaseConfig object shown                 ║
+║  6. Replace FIREBASE_CONFIG in this file (line ~295)     ║
+║                                                          ║
+║  STEP 3 — Enable Google Sign-In                          ║
+║  ──────────────────────────────                          ║
+║  1. Sidebar → Authentication → Get started               ║
+║  2. Sign-in method → Google → Enable → Save              ║
+║  3. Add your email under "Authorised domains" if needed  ║
+║                                                          ║
+║  STEP 4 — Create Firestore Database                      ║
+║  ─────────────────────────────────                       ║
+║  1. Sidebar → Firestore Database → Create database       ║
+║  2. Choose "Start in production mode"                    ║
+║  3. Select region closest to you (e.g. asia-south1)      ║
+║  4. Click "Enable"                                       ║
+║                                                          ║
+║  STEP 5 — Firestore Security Rules                       ║
+║  ─────────────────────────────────                       ║
+║  Go to Firestore → Rules and paste:                      ║
+║                                                          ║
+║  rules_version = '2';                                    ║
+║  service cloud.firestore {                               ║
+║    match /databases/{database}/documents {               ║
+║      match /users/{userId}/{document=**} {               ║
+║        allow read, write: if request.auth != null        ║
+║          && request.auth.uid == userId;                  ║
+║      }                                                   ║
+║    }                                                     ║
+║  }                                                       ║
+║                                                          ║
+║  STEP 6 — Deploy / Host the App                          ║
+║  ─────────────────────────────                           ║
+║  Option A — Firebase Hosting (recommended, free):        ║
+║    npm install -g firebase-tools                         ║
+║    firebase login                                        ║
+║    firebase init hosting   (select your project)         ║
+║    firebase deploy                                       ║
+║                                                          ║
+║  Option B — Any static host:                             ║
+║    Netlify, Vercel, GitHub Pages — just upload           ║
+║    the folder containing index.html + icons.             ║
+║    Add your domain to Firebase Auth → Settings →         ║
+║    Authorised domains.                                   ║
+║                                                          ║
+║  Option C — Local (for testing):                         ║
+║    npx serve .   or   python -m http.server 8080         ║
+║    Open http://localhost:8080                            ║
+║    Note: Add "localhost" to Auth authorised domains.     ║
+║                                                          ║
+║  STEP 7 — Install as PWA                                 ║
+║  ──────────────────────                                  ║
+║  Android: Open in Chrome → ⋮ → "Add to Home screen"     ║
+║  iOS:     Open in Safari → Share → "Add to Home Screen"  ║
+║                                                          ║
+║  DATA STRUCTURE (Firestore)                              ║
+║  ──────────────────────────                              ║
+║  users/{uid}/                                            ║
+║    years/{year}/                                         ║
+║      daily/{docId}      ← daily entries                  ║
+║      portfolio/{mN}     ← monthly asset snapshots        ║
+║    fd/{docId}           ← fixed deposits (all years)     ║
+║    gl/{docId}           ← gold loans (all years)         ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝
+-->
+</body>
+</html>
