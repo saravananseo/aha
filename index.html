@@ -960,7 +960,7 @@ tr:hover td{background:var(--gold-dim);}
 
 // ── REPLACE WITH YOUR FIREBASE CONFIG ───────────────
 const FIREBASE_CONFIG = {
-   apiKey: "AIzaSyDn_xEGexA556-Ed-HrHHVqkdSWiG3qA-Q",
+  apiKey: "AIzaSyDn_xEGexA556-Ed-HrHHVqkdSWiG3qA-Q",
   authDomain: "aha-finance-a280d.firebaseapp.com",
   databaseURL: "https://aha-finance-a280d-default-rtdb.firebaseio.com",
   projectId: "aha-finance-a280d",
@@ -1814,16 +1814,21 @@ function parseUpload(type, rows) {
   if (type === 'fd') {
     return rows.map(r => {
       const cap = n2(r[1]), rate = parseFloat(r[2])||1.5;
-      return { date: String(r[0]||''), capital: cap, rate, monthly: +(cap*(rate/100)).toFixed(2), notes: String(r[3]||''), marks:{} };
-    }).filter(r => r.date && r.capital);
+      // Normalise date — Excel may give JS Date object or YYYY-MM-DD string
+      const date = fmtDate(r[0] instanceof Date ? r[0] : String(r[0]||''));
+      return { date, capital: cap, rate, monthly: +(cap*(rate/100)).toFixed(2), notes: String(r[3]||''), marks:{} };
+    }).filter(r => r.date && r.date !== '—' && r.capital);
   }
   if (type === 'goldloan') {
     return rows.map(r => {
       const cap = n2(r[1]), rate = parseFloat(r[2])||1.5, months = n2(r[4]);
       const status = String(r[5]||'Active');
       const interest = months && cap ? +(cap*(rate/100)*months).toFixed(2) : 0;
-      return { date:String(r[0]||''), capital:cap, rate, releaseDate:String(r[3]||''), months, status, interest, total: interest ? cap+interest : 0, notes:'' };
-    }).filter(r => r.date && r.capital);
+      // Normalise dates
+      const date        = fmtDate(r[0] instanceof Date ? r[0] : String(r[0]||''));
+      const releaseDate = r[3] ? fmtDate(r[3] instanceof Date ? r[3] : String(r[3])) : '';
+      return { date, capital:cap, rate, releaseDate, months, status, interest, total: interest ? cap+interest : 0, notes:'' };
+    }).filter(r => r.date && r.date !== '—' && r.capital);
   }
   return [];
 }
