@@ -1785,9 +1785,28 @@ function processXLSX(file) {
   const reader = new FileReader();
   reader.onload = (ev) => {
     try {
-      const wb    = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
+      // cellDates:false + raw:false + dateNF makes XLSX output date cells as
+      // formatted strings (YYYY-MM-DD) instead of JS Date objects (which are
+      // UTC midnight and shift 1 day back in IST / UTC+5:30)
+      const wb    = XLSX.read(ev.target.result, { type: 'array', cellDates: false });
       const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      // Apply date format so date serials come out as YYYY-MM-DD strings
+      Object.keys(sheet).forEach(k => {
+        if (k[0] === '!') return;
+        const cell = sheet[k];
+        if (cell.t === 'n' && cell.z && /[dmy]/i.test(cell.z)) {
+          // It's a date serial — format it ourselves as YYYY-MM-DD (local)
+          const dateVal = XLSX.SSF.parse_date_code(cell.v);
+          if (dateVal) {
+            const mm = String(dateVal.m).padStart(2,'0');
+            const dd = String(dateVal.d).padStart(2,'0');
+            cell.w = `${dateVal.y}-${mm}-${dd}`;
+            cell.t = 's';
+            cell.v = cell.w;
+          }
+        }
+      });
+      const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
       const data  = rows.slice(1).filter(r => r.some(c => c !== ''));
       uploadParsed = parseUpload(uploadType, data);
       if (!uploadParsed.length) { toast('⚠️ No valid rows found — check column format'); return; }
@@ -1814,8 +1833,8 @@ function parseUpload(type, rows) {
   if (type === 'fd') {
     return rows.map(r => {
       const cap = n2(r[1]), rate = parseFloat(r[2])||1.5;
-      // Normalise date — Excel may give JS Date object or YYYY-MM-DD string
-      const date = fmtDate(r[0] instanceof Date ? r[0] : String(r[0]||''));
+      // r[0] is always a string now (YYYY-MM-DD from XLSX) — normalise to DD-MM-YYYY
+      const date = fmtDate(String(r[0]||''));
       return { date, capital: cap, rate, monthly: +(cap*(rate/100)).toFixed(2), notes: String(r[3]||''), marks:{} };
     }).filter(r => r.date && r.date !== '—' && r.capital);
   }
@@ -1824,9 +1843,9 @@ function parseUpload(type, rows) {
       const cap = n2(r[1]), rate = parseFloat(r[2])||1.5, months = n2(r[4]);
       const status = String(r[5]||'Active');
       const interest = months && cap ? +(cap*(rate/100)*months).toFixed(2) : 0;
-      // Normalise dates
-      const date        = fmtDate(r[0] instanceof Date ? r[0] : String(r[0]||''));
-      const releaseDate = r[3] ? fmtDate(r[3] instanceof Date ? r[3] : String(r[3])) : '';
+      // r[0]/r[3] are always strings now (YYYY-MM-DD from XLSX)
+      const date        = fmtDate(String(r[0]||''));
+      const releaseDate = r[3] ? fmtDate(String(r[3])) : '';
       return { date, capital:cap, rate, releaseDate, months, status, interest, total: interest ? cap+interest : 0, notes:'' };
     }).filter(r => r.date && r.date !== '—' && r.capital);
   }
