@@ -31,46 +31,288 @@
   --green:#52b788; --red:#e05555; --blue:#5b9bd5; --pur:#9b7ecb; --teal:#4ecdc4; --org:#f4a261;
   --r:14px; --sb:env(safe-area-inset-bottom,0px); --st:env(safe-area-inset-top,0px);
 }
-/* ── LIGHT THEME ─────────────────────────────────────── */
+/* ════════════════════════════════════════════════════
+   LIGHT THEME — Premium Fintech Slate
+   Inspired by Zerodha Kite / Groww — clean white
+   surfaces, deep slate typography, teal-green accent
+   ════════════════════════════════════════════════════ */
 [data-theme="light"]{
-  /* Accent — vivid indigo replaces gold in light mode */
-  --gold:#4f46e5; --gold-l:#6366f1; --gold-dim:rgba(79,70,229,.08); --gold-b:rgba(79,70,229,.2);
-  /* Backgrounds — pure white surface stack */
-  --bg:#f0f2f5; --bg2:#ffffff; --bg3:#f7f8fa; --bg4:#eceef2; --bg5:#e2e5eb;
-  /* Typography */
-  --text:#0f172a; --dim:#475569; --muted:#94a3b8;
-  /* Semantic */
-  --green:#059669; --red:#dc2626; --blue:#2563eb; --pur:#7c3aed; --teal:#0891b2; --org:#ea580c;
-  /* Chart accent colour (used in pr-f gradient) */
-  --chart-a:#4f46e5; --chart-b:#818cf8;
+  /* ── Accent: Deep teal-green — professional, financial ── */
+  --gold:#0d7f6e;
+  --gold-l:#10a390;
+  --gold-dim:rgba(13,127,110,.08);
+  --gold-b:rgba(13,127,110,.18);
+
+  /* ── Surface stack — white → very light grey ── */
+  --bg:#eef1f6;
+  --bg2:#ffffff;
+  --bg3:#f4f6f9;
+  --bg4:#e8ecf2;
+  --bg5:#dde2ea;
+
+  /* ── Typography — deep slate, not harsh black ── */
+  --text:#0f1923;
+  --dim:#4a5568;
+  --muted:#8e9ab0;
+
+  /* ── Semantic colours — vivid, high contrast on white ── */
+  --green:#0a8a5e;
+  --red:#d93025;
+  --blue:#1a6fc4;
+  --pur:#6332b8;
+  --teal:#0077b6;
+  --org:#d4600a;
+
+  /* ── shadow tokens for light mode ── */
+  --sh-sm:0 1px 3px rgba(15,25,35,.08),0 1px 2px rgba(15,25,35,.04);
+  --sh-md:0 4px 12px rgba(15,25,35,.08),0 2px 4px rgba(15,25,35,.04);
 }
-/* Light-mode specific overrides */
-[data-theme="light"] .app-name{ color:var(--gold); }
-[data-theme="light"] .yr-lbl{ color:var(--gold); }
-[data-theme="light"] .kv{ color:var(--gold); }
-[data-theme="light"] .tg{ color:var(--gold); }
-[data-theme="light"] .card{ box-shadow:0 1px 4px rgba(0,0,0,.06); }
-[data-theme="light"] .kpi{ box-shadow:0 1px 3px rgba(0,0,0,.05); }
-[data-theme="light"] nav button.active{ color:var(--gold); border-bottom-color:var(--gold); }
-[data-theme="light"] .mtab.active{ background:var(--gold); color:#fff; border-color:var(--gold); }
-[data-theme="light"] .btn-gold{ background:var(--gold); color:#fff; }
-[data-theme="light"] .btn-gold:hover{ background:var(--gold-l); }
-[data-theme="light"] .fab{ background:linear-gradient(135deg,var(--gold),var(--gold-l)); color:#fff; }
-[data-theme="light"] .badge.bo{ background:rgba(79,70,229,.1); color:var(--gold); }
-[data-theme="light"] .pr-f{ background:linear-gradient(90deg,#4f46e5,#818cf8); }
+
+/* ── Surface & typography overrides ── */
+[data-theme="light"] html,
+[data-theme="light"] body{ background:var(--bg); color:var(--text); }
+
+/* ── Header ── */
+[data-theme="light"] header{
+  background:var(--gold);
+  border-bottom:none;
+  box-shadow:0 2px 8px rgba(13,127,110,.25);
+}
+[data-theme="light"] .app-name{ color:#ffffff; letter-spacing:2px; }
+[data-theme="light"] .app-sub{ color:rgba(255,255,255,.7); }
+[data-theme="light"] .yr-lbl{ color:#ffffff; }
+[data-theme="light"] .yr-btn{ color:rgba(255,255,255,.75); }
+[data-theme="light"] .yr-btn:hover{ color:#ffffff; }
+[data-theme="light"] .yr-sw{
+  background:rgba(255,255,255,.15);
+  border-color:rgba(255,255,255,.3);
+  backdrop-filter:blur(4px);
+}
+[data-theme="light"] .theme-btn{
+  background:rgba(255,255,255,.15);
+  border-color:rgba(255,255,255,.3);
+  color:#ffffff;
+}
+[data-theme="light"] .theme-btn:hover{ background:rgba(255,255,255,.25); }
+[data-theme="light"] .upload-hdr-btn{
+  background:rgba(255,255,255,.15);
+  border-color:rgba(255,255,255,.3);
+  color:#ffffff;
+}
+[data-theme="light"] .upload-hdr-btn:hover{ background:rgba(255,255,255,.25); }
+[data-theme="light"] .logo-row img{ border-color:rgba(255,255,255,.4); }
+[data-theme="light"] .user-avatar{ border-color:rgba(255,255,255,.4); }
+[data-theme="light"] .user-initials{
+  background:rgba(255,255,255,.2);
+  border-color:rgba(255,255,255,.4);
+  color:#ffffff;
+}
+[data-theme="light"] .sync-dot{ background:#a7f3d0; }
+[data-theme="light"] .sync-dot.off{ background:#fca5a5; }
+
+/* ── Nav ── */
+[data-theme="light"] nav{
+  background:#ffffff;
+  border-bottom:1px solid #e2e8f0;
+}
+[data-theme="light"] nav button{ color:#94a3b8; }
+[data-theme="light"] nav button.active{
+  color:var(--gold);
+  border-bottom-color:var(--gold);
+  font-weight:600;
+}
+[data-theme="light"] nav button:hover:not(.active){ color:var(--dim); }
+
+/* ── Cards ── */
+[data-theme="light"] .card{
+  background:#ffffff;
+  border:1px solid #e2e8f0;
+  box-shadow:var(--sh-sm);
+}
+[data-theme="light"] .card-title{ color:#94a3b8; }
+
+/* ── KPI tiles ── */
+[data-theme="light"] .kpi{
+  background:#ffffff;
+  border:1px solid #e8ecf2;
+  box-shadow:var(--sh-sm);
+}
+[data-theme="light"] .kl{ color:#94a3b8; }
+[data-theme="light"] .kv{ color:var(--gold); font-weight:700; }
+[data-theme="light"] .kv.g{ color:var(--green); }
+[data-theme="light"] .kv.r{ color:var(--red); }
+
+/* ── Section headers ── */
+[data-theme="light"] .sec{ color:var(--gold); border-bottom-color:#e2e8f0; }
 [data-theme="light"] .sec::before{ background:var(--gold); }
-[data-theme="light"] .mk.done{ background:rgba(5,150,105,.12); border-color:rgba(5,150,105,.35); color:var(--green); }
-[data-theme="light"] header{ border-bottom-color:rgba(79,70,229,.15); }
-[data-theme="light"] nav{ border-bottom-color:rgba(79,70,229,.15); }
-[data-theme="light"] .logo-row img{ border-color:rgba(79,70,229,.2); }
-[data-theme="light"] .yr-sw{ background:#f0f2f5; border-color:rgba(79,70,229,.2); }
-[data-theme="light"] .theme-btn{ background:#f0f2f5; border-color:rgba(79,70,229,.2); }
-[data-theme="light"] .upload-hdr-btn{ background:#f0f2f5; border-color:rgba(79,70,229,.2); }
-[data-theme="light"] .lcard{ background:var(--bg3); }
-[data-theme="light"] .ltag{ background:var(--bg4); }
-[data-theme="light"] .ttot td{ background:var(--bg3); color:var(--gold); }
-[data-theme="light"] .sync-dot{ background:var(--green); }
-[data-theme="light"] .sync-dot.off{ background:var(--red); }
+
+/* ── Tables ── */
+[data-theme="light"] th{
+  background:#f8fafc;
+  color:#64748b;
+  border-bottom-color:#e2e8f0;
+}
+[data-theme="light"] td{ border-bottom-color:#f1f5f9; }
+[data-theme="light"] tr:hover td{ background:rgba(13,127,110,.04); }
+[data-theme="light"] .ttot td{
+  background:#f0fdf9;
+  color:var(--gold);
+  border-top-color:#ccfbf1;
+}
+[data-theme="light"] .num.pos{ color:var(--green); }
+
+/* ── Badges ── */
+[data-theme="light"] .badge.bg{ background:#dcfce7; color:#166534; }
+[data-theme="light"] .badge.br{ background:#fee2e2; color:#991b1b; }
+[data-theme="light"] .badge.bo{ background:#ccfbf1; color:var(--gold); }
+
+/* ── Buttons ── */
+[data-theme="light"] .btn-gold{ background:var(--gold); color:#ffffff; }
+[data-theme="light"] .btn-gold:hover{ background:var(--gold-l); }
+[data-theme="light"] .btn-ghost{
+  background:none;
+  border-color:#e2e8f0;
+  color:var(--dim);
+}
+[data-theme="light"] .btn-ghost:hover{ border-color:var(--gold); color:var(--gold); }
+[data-theme="light"] .btn-sm{
+  border-color:#e2e8f0;
+  color:var(--dim);
+  background:#f8fafc;
+}
+[data-theme="light"] .btn-sm:hover{ border-color:var(--gold); color:var(--gold); }
+[data-theme="light"] .icon-btn{ color:#94a3b8; }
+[data-theme="light"] .icon-btn:hover{ color:var(--gold); }
+[data-theme="light"] .icon-btn.del:hover{ color:var(--red); }
+
+/* ── FAB ── */
+[data-theme="light"] .fab{
+  background:linear-gradient(135deg,var(--gold),var(--gold-l));
+  color:#ffffff;
+  box-shadow:0 4px 16px rgba(13,127,110,.35);
+}
+
+/* ── Month tabs ── */
+[data-theme="light"] .mtab{
+  border-color:#e2e8f0;
+  color:var(--dim);
+  background:#f8fafc;
+}
+[data-theme="light"] .mtab.active{
+  background:var(--gold);
+  color:#ffffff;
+  border-color:var(--gold);
+  box-shadow:0 2px 8px rgba(13,127,110,.25);
+}
+
+/* ── Progress bars ── */
+[data-theme="light"] .pr-bar{ background:#e8ecf2; }
+[data-theme="light"] .pr-f{ background:linear-gradient(90deg,var(--gold),var(--gold-l)); }
+[data-theme="light"] .pr-l{ color:var(--dim); }
+[data-theme="light"] .pr-p{ color:var(--dim); }
+
+/* ── Chip ── */
+[data-theme="light"] .chip{ background:#e8ecf2; color:var(--gold); font-weight:700; }
+
+/* ── Loan cards ── */
+[data-theme="light"] .lcard{
+  background:#ffffff;
+  border-color:#e2e8f0;
+  box-shadow:var(--sh-sm);
+}
+[data-theme="light"] .la{ color:var(--gold); }
+[data-theme="light"] .ld{ color:#94a3b8; }
+[data-theme="light"] .ltag{ background:#f1f5f9; color:#64748b; }
+
+/* ── FD month marks ── */
+[data-theme="light"] .mk{
+  background:#f1f5f9;
+  border-color:#e2e8f0;
+  color:#94a3b8;
+}
+[data-theme="light"] .mk.done{
+  background:#dcfce7;
+  border-color:#86efac;
+  color:#166534;
+}
+[data-theme="light"] .mk:hover{ border-color:var(--gold)!important; color:var(--gold)!important; }
+
+/* ── Forms ── */
+[data-theme="light"] .frow input,
+[data-theme="light"] .frow select,
+[data-theme="light"] .frow textarea{
+  background:#f8fafc;
+  border-color:#e2e8f0;
+  color:var(--text);
+}
+[data-theme="light"] .frow input:focus,
+[data-theme="light"] .frow select:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(13,127,110,.1); }
+[data-theme="light"] .frow label{ color:#64748b; }
+[data-theme="light"] .sub-label{ color:#94a3b8; }
+[data-theme="light"] .frow select option{ background:#ffffff; }
+
+/* ── Modal ── */
+[data-theme="light"] .modal{
+  background:#ffffff;
+  border-color:#e2e8f0;
+  box-shadow:0 -4px 32px rgba(15,25,35,.12);
+}
+[data-theme="light"] .modal-title{ color:var(--gold); }
+[data-theme="light"] .close-btn{ color:#94a3b8; }
+[data-theme="light"] .close-btn:hover{ color:var(--text); }
+
+/* ── Upload zone ── */
+[data-theme="light"] .upload-zone{
+  border-color:#cbd5e1;
+  background:#f8fafc;
+}
+[data-theme="light"] .upload-zone:hover,
+[data-theme="light"] .upload-zone.drag{
+  border-color:var(--gold);
+  background:rgba(13,127,110,.04);
+}
+[data-theme="light"] .utype-card{
+  background:#f8fafc;
+  border-color:#e2e8f0;
+}
+[data-theme="light"] .utype-card.selected{
+  border-color:var(--gold);
+  background:rgba(13,127,110,.06);
+}
+[data-theme="light"] .format-box{ background:#f8fafc; border-color:#e2e8f0; }
+[data-theme="light"] .format-col{ background:#e8ecf2; color:var(--text); }
+
+/* ── Scrollbar ── */
+[data-theme="light"] #content::-webkit-scrollbar-thumb{ background:#cbd5e1; }
+[data-theme="light"] #content::-webkit-scrollbar{ background:#f1f5f9; }
+
+/* ── Toast ── */
+[data-theme="light"] .toast{
+  background:#0f1923;
+  border-color:transparent;
+  color:#ffffff;
+  box-shadow:0 4px 16px rgba(0,0,0,.2);
+}
+
+/* ── Login screen ── */
+[data-theme="light"] #login-screen{ background:var(--bg); }
+[data-theme="light"] .login-title{ color:var(--gold); }
+[data-theme="light"] .google-btn{
+  background:#ffffff;
+  border-color:#e2e8f0;
+  box-shadow:var(--sh-sm);
+}
+[data-theme="light"] .google-btn:hover{
+  border-color:var(--gold);
+  box-shadow:0 2px 8px rgba(13,127,110,.15);
+}
+
+/* ── tg utility ── */
+[data-theme="light"] .tg{ color:var(--gold); }
+
+/* ── Loading spinner ── */
+[data-theme="light"] #loading{ background:var(--bg); }
+[data-theme="light"] .spin{ border-color:#e2e8f0; border-top-color:var(--gold); }
 /* ── THEME SWITCHER BUTTON ───────────────────────────── */
 .theme-btn{
   display:flex;align-items:center;justify-content:center;
@@ -674,7 +916,10 @@ tr:hover td{background:var(--gold-dim);}
 <div class="overlay" id="glModal">
 <div class="modal">
   <div class="modal-head"><div class="modal-title">Add Gold Loan</div><button class="close-btn" onclick="closeModal('glModal')">✕</button></div>
-  <div class="frow"><label>Given Date (DD-MM-YYYY)</label><input type="date" id="gl-date"></div>
+  <div class="fg">
+    <div class="frow"><label>Loan Number</label><input type="text" id="gl-loanno" placeholder="e.g. GL-001"></div>
+    <div class="frow"><label>Given Date (DD-MM-YYYY)</label><input type="date" id="gl-date"></div>
+  </div>
   <div class="fg">
     <div class="frow"><label>Capital (₹)</label><input type="number" id="gl-capital" placeholder="200000"></div>
     <div class="frow"><label>Rate (%/month)</label><input type="number" id="gl-rate" placeholder="1.5" step="0.01" value="1.5"></div>
@@ -1210,7 +1455,7 @@ function drawPortChart(portData, total) {
   if (!vals.length) { wrap.innerHTML='<div class="empty">No data. Tap Edit.</div>'; return; }
 
   // Build colour ramp — vivid multi-colour palette
-  const BCOLS = ['#4f46e5','#059669','#dc2626','#ea580c','#0891b2','#7c3aed','#d97706','#0284c7','#be185d','#16a34a'];
+  const BCOLS = ['#0d7f6e','#1a6fc4','#d4600a','#6332b8','#0a8a5e','#d93025','#0077b6','#b45309','#be185d','#059669'];
 
   // Sort descending by value for better visual
   const sorted = labels.map((l,i)=>({l,v:vals[i],p:pcts[i],c:BCOLS[i%BCOLS.length]}))
@@ -1352,7 +1597,11 @@ function renderInvest() {
         : glMonthCount(g.date, fmtDateISO(new Date()));
       return `<div class="lcard">
         <div class="lt">
-          <div><div class="ld">${fmtDate(g.date)}</div><div class="la">₹${(g.capital||0).toLocaleString('en-IN')}</div></div>
+          <div>
+            ${g.loanNo ? `<div style="font-size:10px;font-weight:600;color:var(--gold);letter-spacing:.8px;text-transform:uppercase;margin-bottom:2px;"># ${g.loanNo}</div>` : ''}
+            <div class="ld">${fmtDate(g.date)}</div>
+            <div class="la">₹${(g.capital||0).toLocaleString('en-IN')}</div>
+          </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
             <span class="badge ${isClosed?'br':'bo'}">${g.status||'Active'}</span>
             ${!isClosed ? `<button class="btn-sm" onclick="openCloseGL('${g.id}')">Close Loan</button>` : ''}
@@ -1377,10 +1626,11 @@ async function saveGL() {
   const capital  = parseFloat(document.getElementById('gl-capital').value) || 0;
   const rate     = parseFloat(document.getElementById('gl-rate').value) || 1.5;
   const notes    = document.getElementById('gl-notes').value.trim();
+  const loanNo   = document.getElementById('gl-loanno').value.trim();
   if (!dateISO2 || !capital) { toast('Enter date and capital'); return; }
   const date     = fmtDate(dateISO2);  // store as DD-MM-YYYY
   try {
-    await globalCol('gl').add({ date, capital, rate, notes, status: 'Active', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await globalCol('gl').add({ date, capital, rate, notes, loanNo, status: 'Active', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
     closeModal('glModal');
     toast('Gold Loan added ✓');
   } catch(e) { toast('Error: '+e.message); }
@@ -1394,6 +1644,7 @@ function openCloseGL(id) {
   const todayISO = fmtDateISO(new Date());
   document.getElementById('glc-release').value = todayISO;
   document.getElementById('glc-summary').innerHTML = `
+    ${gl.loanNo ? `<div class="fb"><span>Loan No.</span><span style="color:var(--gold);font-weight:600;">${gl.loanNo}</span></div>` : ''}
     <div class="fb"><span>Capital</span><span class="tg">₹${(gl.capital||0).toLocaleString('en-IN')}</span></div>
     <div class="fb"><span>Given Date</span><span>${fmtDate(gl.date)}</span></div>
     <div class="fb"><span>Rate</span><span>${gl.rate||1.5}%/month</span></div>`;
@@ -1825,8 +2076,8 @@ function toggleTheme() {
 
 function applyChartTheme(theme) {
   if (theme === 'light') {
-    Chart.defaults.color = '#475569';
-    Chart.defaults.borderColor = 'rgba(79,70,229,.1)';
+    Chart.defaults.color = '#4a5568';
+    Chart.defaults.borderColor = 'rgba(13,127,110,.12)';
   } else {
     Chart.defaults.color = '#8a8070';
     Chart.defaults.borderColor = 'rgba(201,168,76,.1)';
