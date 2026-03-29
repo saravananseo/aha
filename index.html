@@ -1594,13 +1594,11 @@ function renderInvest() {
   document.getElementById('gold-loans').innerHTML = !sortedGL.length ? '<div class="empty">No gold loans yet.</div>' :
     sortedGL.map(g => {
       const isClosed = g.status === 'Closed';
-      const calcMonths = isClosed
-        ? calcGLMonths(g.date, g.releaseDate, g.capital, g.rate)
-        : calcGLMonths(g.date, fmtDateISO(new Date()), g.capital, g.rate);
-      const calcInterest = calcMonths * (g.capital||0) * (g.rate||1.5) / 100;
+      const todayForCalc = fmtDateISO(new Date());
       const numMonths = isClosed
         ? glMonthCount(g.date, g.releaseDate)
-        : glMonthCount(g.date, fmtDateISO(new Date()));
+        : glMonthCount(g.date, todayForCalc);
+      const calcInterest = numMonths * (g.capital||0) * (g.rate||1.5) / 100;
       return `<div class="lcard">
         <div class="lt">
           <div>
