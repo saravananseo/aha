@@ -373,6 +373,7 @@ nav button.active{color:var(--gold);border-bottom-color:var(--gold);}
 .kg{display:grid;gap:8px;margin-bottom:12px;}
 .kg.c2{grid-template-columns:1fr 1fr;}
 .kg.c3{grid-template-columns:1fr 1fr 1fr;}
+.kg.c4{grid-template-columns:1fr 1fr 1fr 1fr;}
 .kpi{background:var(--bg3);border:1px solid var(--gold-b);border-radius:10px;padding:11px 10px;text-align:center;}
 .kl{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.9px;margin-bottom:3px;}
 .kv{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:var(--gold);line-height:1.1;}
@@ -723,7 +724,7 @@ tr:hover td{background:var(--gold-dim);}
     <!-- ═══ INVEST ═══ -->
     <div class="tab" id="tab-invest">
       <div class="sec">Fixed Deposits</div>
-      <div class="kg c2" id="fd-kpis"></div>
+      <div class="kg c3" id="fd-kpis"></div>
       <div class="card" style="padding:0;overflow:hidden;">
         <div class="tw"><table>
           <thead><tr><th>Date</th><th class="num">Capital</th><th class="num">₹/mo</th><th>Interest Received</th><th></th></tr></thead>
@@ -734,9 +735,9 @@ tr:hover td{background:var(--gold-dim);}
       <button class="btn btn-gold" style="margin-bottom:16px;" onclick="openModal('fdModal')">+ Add Fixed Deposit</button>
 
       <div class="sec">Gold Loans</div>
-      <div class="kg c3" id="gl-kpis"></div>
+      <div class="kg c2" id="gl-kpis" style="grid-template-columns:1fr 1fr;"></div>
       <div id="gold-loans"></div>
-      <button class="btn btn-gold" style="margin-bottom:12px;" onclick="openModal('glModal')">+ Add Gold Loan</button>
+      <button class="btn btn-gold" style="margin-bottom:12px;" onclick="openAddGL()">+ Add Gold Loan</button>
     </div>
 
     <!-- ═══ UPLOAD ═══ -->
@@ -1544,6 +1545,7 @@ function renderInvest() {
     });
   });
   document.getElementById('fd-kpis').innerHTML = `
+    <div class="kpi"><div class="kl">No. of FDs</div><div class="kv sm">${sortedFD.length}</div></div>
     <div class="kpi"><div class="kl">Total Capital</div><div class="kv sm">${fmtK(totalCap)}</div></div>
     <div class="kpi"><div class="kl">Received ${currentYear}</div><div class="kv g sm">${fmtK(totalReceivedThisYear)}</div></div>`;
 
@@ -1579,10 +1581,13 @@ function renderInvest() {
     return s + calcGLMonths(g.date, today, g.capital, g.rate);
   }, 0);
 
+  document.getElementById('gl-kpis').style.gridTemplateColumns = '1fr 1fr';
   document.getElementById('gl-kpis').innerHTML = `
+    <div class="kpi"><div class="kl">Active Loans</div><div class="kv sm">${activeGL.length}</div></div>
     <div class="kpi"><div class="kl">Active Capital</div><div class="kv sm">${fmtK(actCap)}</div></div>
     <div class="kpi"><div class="kl">Interest Earned</div><div class="kv g sm">${fmtK(earnedInt)}</div></div>
     <div class="kpi"><div class="kl">Accrued (Active)</div><div class="kv sm" style="color:var(--org);">${fmtK(accruedInt)}</div></div>`;
+  document.getElementById('gl-kpis').style.gridTemplateColumns = '1fr 1fr';
 
   // Gold Loan cards — sort by date ascending
   const sortedGL = [...D.gl].sort((a,b) => parseDateStr(a.date) - parseDateStr(b.date));
@@ -1623,6 +1628,19 @@ function renderInvest() {
 }
 
 // ── Gold Loan CRUD ────────────────────────────────────
+function openAddGL() {
+  // Reset all fields and set modal to Add mode
+  document.getElementById('gl-edit-id').value = '';
+  document.getElementById('gl-loanno').value  = '';
+  document.getElementById('gl-date').value    = '';
+  document.getElementById('gl-capital').value = '';
+  document.getElementById('gl-rate').value    = '1.5';
+  document.getElementById('gl-notes').value   = '';
+  document.getElementById('glModal-title').textContent = 'Add Gold Loan';
+  document.getElementById('gl-save-btn').textContent   = 'Add Gold Loan';
+  openModal('glModal');
+}
+
 function openEditGL(id) {
   const gl = D.gl.find(g => g.id === id);
   if (!gl) return;
@@ -1742,7 +1760,7 @@ const FORMAT_DEFS = {
   },
   goldloan: {
     title: '📋 Column Format — Gold Loans',
-    cols: ['Given Date (YYYY-MM-DD)','Capital ₹','Rate (%/mo)','Release Date (opt)','Months (opt)','Status (Active/Closed)']
+    cols: ['Given Date (YYYY-MM-DD)','Capital ₹','Rate (%/mo)','Release Date (opt)','Months (opt)','Status (Active/Closed)','Loan Number (opt)']
   }
 };
 
@@ -1846,7 +1864,8 @@ function parseUpload(type, rows) {
       // r[0]/r[3] are always strings now (YYYY-MM-DD from XLSX)
       const date        = fmtDate(String(r[0]||''));
       const releaseDate = r[3] ? fmtDate(String(r[3])) : '';
-      return { date, capital:cap, rate, releaseDate, months, status, interest, total: interest ? cap+interest : 0, notes:'' };
+      const loanNo = String(r[6]||'');
+      return { date, capital:cap, rate, releaseDate, months, status, interest, total: interest ? cap+interest : 0, notes:'', loanNo };
     }).filter(r => r.date && r.date !== '—' && r.capital);
   }
   return [];
