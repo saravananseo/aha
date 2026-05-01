@@ -462,7 +462,6 @@ tr:hover td{background:var(--gold-dim);}
 .btn-danger:hover{background:rgba(224,85,85,.22);}
 .btn-sm{padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid var(--gold-b);background:none;color:var(--dim);cursor:pointer;transition:all .2s;font-family:'DM Sans',sans-serif;}
 .btn-sm:hover,.btn-sm.act{border-color:var(--gold);color:var(--gold);}
-.btn-sm:disabled{opacity:.38;cursor:not-allowed;pointer-events:none;}
 .btn-sm.done{background:rgba(82,183,136,.15);border-color:rgba(82,183,136,.4);color:var(--green);}
 .icon-btn{background:none;border:none;cursor:pointer;color:var(--dim);padding:4px 6px;font-size:14px;transition:color .2s;border-radius:4px;}
 .icon-btn:hover{color:var(--gold);}
@@ -684,10 +683,6 @@ tr:hover td{background:var(--gold-dim);}
       <div class="mtabs" id="daily-mtabs"></div>
       <div class="kg c3" id="daily-summary" style="margin-bottom:12px;"></div>
       <div class="card" style="padding:0;overflow:hidden;">
-        <div style="padding:10px 14px 8px;display:flex;justify-content:space-between;align-items:center;">
-          <div class="card-title" style="margin:0;" id="daily-card-title">Entries</div>
-          <button class="btn-sm" id="daily-dl-btn" onclick="downloadDailyXLSX()" title="Download this month as Excel">⬇ Download</button>
-        </div>
         <div class="tw"><table>
           <thead><tr>
             <th>Day</th><th class="num">Income</th><th class="num">Expense</th>
@@ -1201,12 +1196,6 @@ function renderDailyTab() {
     <div class="kpi"><div class="kl">Expense</div><div class="kv r">${fmt(totExp)}</div></div>
     <div class="kpi"><div class="kl">Profit</div><div class="kv g">${fmt(totPl)}</div></div>`;
 
-  // Update card title & download button state
-  const titleEl = document.getElementById('daily-card-title');
-  const dlBtn   = document.getElementById('daily-dl-btn');
-  if (titleEl) titleEl.textContent = `${MONTHS[dailyMonth]} ${currentYear} — Entries`;
-  if (dlBtn)   dlBtn.disabled = !entries.length;
-
   if (!entries.length) { document.getElementById('daily-body').innerHTML = `<tr><td colspan="6" class="empty">No entries for ${MONTHS[dailyMonth]}. Tap + to add.</td></tr>`; return; }
 
   document.getElementById('daily-body').innerHTML = entries.map(e => {
@@ -1228,77 +1217,6 @@ function renderDailyTab() {
 function setDailyMonth(m) {
   dailyMonth = m;
   renderDailyTab();
-}
-
-// ── Download daily entries for selected month as XLSX ─
-function downloadDailyXLSX() {
-  const entries = getDailyForMonth(dailyMonth);
-  if (!entries.length) { toast('No entries to download'); return; }
-
-  const monthName = MONTHS[dailyMonth];
-  const year      = currentYear;
-
-  // ── Build worksheet rows ──────────────────────────
-  // Header row
-  const header = [
-    'Day', 'Date',
-    'Income (₹)', 'Expense (₹)', 'P&L (₹)',
-    'Salary', 'Interest', 'Dividend', 'Hedging', 'Other Income',
-    'Food', 'Cloths', 'Medical', 'Travel', 'Education', 'Rent', 'Other Expense',
-    'Note'
-  ];
-
-  const dataRows = entries.map(e => {
-    const ib = e.incBreak || {};
-    const eb = e.expBreak || {};
-    // Build a proper date string: DD-MM-YYYY
-    const mm = String(dailyMonth + 1).padStart(2, '0');
-    const dd = String(e.day).padStart(2, '0');
-    const dateStr = `${dd}-${mm}-${year}`;
-    return [
-      e.day,
-      dateStr,
-      e.income  || 0,
-      e.expense || 0,
-      (e.income || 0) - (e.expense || 0),
-      ib.salary   || 0, ib.interest  || 0, ib.dividend || 0, ib.hedging || 0, ib.others || 0,
-      eb.food     || 0, eb.cloths    || 0, eb.medical  || 0, eb.travel  || 0,
-      eb.education|| 0, eb.rent      || 0, eb.others   || 0,
-      e.note || ''
-    ];
-  });
-
-  // Totals row
-  const sum = (col) => dataRows.reduce((s, r) => s + (typeof r[col] === 'number' ? r[col] : 0), 0);
-  const totalRow = [
-    'TOTAL', '',
-    sum(2), sum(3), sum(4),
-    sum(5), sum(6), sum(7), sum(8), sum(9),
-    sum(10), sum(11), sum(12), sum(13), sum(14), sum(15), sum(16),
-    ''
-  ];
-
-  const wsData = [header, ...dataRows, totalRow];
-
-  // ── Create workbook ───────────────────────────────
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-  // Column widths
-  ws['!cols'] = [
-    {wch:5},{wch:13},
-    {wch:13},{wch:13},{wch:12},
-    {wch:10},{wch:10},{wch:10},{wch:10},{wch:13},
-    {wch:8},{wch:8},{wch:10},{wch:9},{wch:12},{wch:8},{wch:14},
-    {wch:22}
-  ];
-
-  XLSX.utils.book_append_sheet(wb, ws, monthName);
-
-  // ── Trigger download ──────────────────────────────
-  const fileName = `AHA_Daily_${monthName}_${year}.xlsx`;
-  XLSX.writeFile(wb, fileName);
-  toast(`Downloaded ${fileName} ✓`);
 }
 
 // ════════════════════════════════════════════════════
@@ -2000,6 +1918,17 @@ function showUploadPreview(data, type) {
   document.getElementById('import-btn').disabled = false;
 }
 
+// ── Helper: delete all docs in a query snapshot in batches ──
+async function deleteQueryDocs(querySnap) {
+  const BATCH_SIZE = 400;
+  const docs = querySnap.docs;
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const batch = db.batch();
+    docs.slice(i, i + BATCH_SIZE).forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+}
+
 async function confirmUpload() {
   if (!uploadParsed.length) return;
   const year = parseInt(document.getElementById('ul-year').value) || currentYear;
@@ -2017,16 +1946,41 @@ async function confirmUpload() {
   const progDone = document.getElementById('prog-done');
   const progPct  = document.getElementById('prog-pct');
 
-  const setProgress = (done) => {
+  const setProgress = (done, label) => {
     const pct = Math.round(done/total*100);
     fill.style.width = pct + '%';
-    progDone.textContent = `${done} / ${total} rows`;
+    progDone.textContent = label || `${done} / ${total} rows`;
     progPct.textContent  = pct + '%';
   };
   setProgress(0);
 
   try {
     setSyncDot(false);
+
+    // ── STEP 1: Delete only the affected existing data ────────────────
+    // daily  → delete existing docs only for months present in upload
+    // portfolio → docs are keyed by month (m0–m11), batch.set overwrites — no pre-delete needed
+    // fd / goldloan → global collections; delete ALL existing docs then re-import
+    if (type === 'daily') {
+      // Collect unique months in the upload file
+      const uploadMonths = [...new Set(uploadParsed.map(r => r.month))];
+      setProgress(0, 'Clearing old entries for affected months…');
+      for (const m of uploadMonths) {
+        const snap = await col('daily', year).where('month', '==', m).get();
+        await deleteQueryDocs(snap);
+      }
+    } else if (type === 'fd') {
+      setProgress(0, 'Clearing existing FD records…');
+      const snap = await globalCol('fd').get();
+      await deleteQueryDocs(snap);
+    } else if (type === 'goldloan') {
+      setProgress(0, 'Clearing existing Gold Loan records…');
+      const snap = await globalCol('gl').get();
+      await deleteQueryDocs(snap);
+    }
+    // portfolio: no pre-delete — each month doc is set() by key (m0…m11), so it naturally overwrites
+
+    // ── STEP 2: Write new data ────────────────────────────────────────
     const BATCH_SIZE = 400;
     let done = 0;
 
@@ -2035,7 +1989,7 @@ async function confirmUpload() {
       const batch = db.batch();
       chunk.forEach(item => {
         let ref;
-        if (type === 'daily')         ref = col('daily', year).doc();
+        if (type === 'daily')          ref = col('daily', year).doc();
         else if (type === 'portfolio') ref = col('portfolio', year).doc(`m${item.month}`);
         else if (type === 'fd')        ref = globalCol('fd').doc();
         else if (type === 'goldloan')  ref = globalCol('gl').doc();
