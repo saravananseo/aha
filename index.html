@@ -307,6 +307,9 @@
   box-shadow:0 2px 8px rgba(13,127,110,.15);
 }
 
+[data-theme="light"] #gl-search{ background:#f8fafc; border-color:#e2e8f0; color:var(--text); }
+[data-theme="light"] #gl-search:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(13,127,110,.1); }
+
 /* ── tg utility ── */
 [data-theme="light"] .tg{ color:var(--gold); }
 
@@ -462,6 +465,7 @@ tr:hover td{background:var(--gold-dim);}
 .btn-danger:hover{background:rgba(224,85,85,.22);}
 .btn-sm{padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid var(--gold-b);background:none;color:var(--dim);cursor:pointer;transition:all .2s;font-family:'DM Sans',sans-serif;}
 .btn-sm:hover,.btn-sm.act{border-color:var(--gold);color:var(--gold);}
+.btn-sm:disabled{opacity:.38;cursor:not-allowed;pointer-events:none;}
 .btn-sm.done{background:rgba(82,183,136,.15);border-color:rgba(82,183,136,.4);color:var(--green);}
 .icon-btn{background:none;border:none;cursor:pointer;color:var(--dim);padding:4px 6px;font-size:14px;transition:color .2s;border-radius:4px;}
 .icon-btn:hover{color:var(--gold);}
@@ -683,6 +687,10 @@ tr:hover td{background:var(--gold-dim);}
       <div class="mtabs" id="daily-mtabs"></div>
       <div class="kg c3" id="daily-summary" style="margin-bottom:12px;"></div>
       <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:10px 14px 8px;display:flex;justify-content:space-between;align-items:center;">
+          <div class="card-title" style="margin:0;" id="daily-card-title">Entries</div>
+          <button class="btn-sm" id="daily-dl-btn" onclick="downloadDailyXLSX()" title="Download this month as Excel">⬇ Download</button>
+        </div>
         <div class="tw"><table>
           <thead><tr>
             <th>Day</th><th class="num">Income</th><th class="num">Expense</th>
@@ -736,6 +744,17 @@ tr:hover td{background:var(--gold-dim);}
 
       <div class="sec">Gold Loans</div>
       <div class="kg c2" id="gl-kpis" style="grid-template-columns:1fr 1fr;"></div>
+      <div style="position:relative;margin-bottom:10px;">
+        <input type="text" id="gl-search" placeholder="🔍  Search by loan number…"
+          oninput="renderInvest()"
+          style="width:100%;background:var(--bg3);border:1px solid var(--gold-b);border-radius:8px;
+                 color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;
+                 padding:9px 36px 9px 12px;outline:none;transition:border-color .2s;">
+        <button onclick="document.getElementById('gl-search').value='';renderInvest();"
+          style="position:absolute;right:8px;top:50%;transform:translateY(-50%);
+                 background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;
+                 line-height:1;padding:2px 4px;" title="Clear search">✕</button>
+      </div>
       <div id="gold-loans"></div>
       <button class="btn btn-gold" style="margin-bottom:12px;" onclick="openAddGL()">+ Add Gold Loan</button>
     </div>
@@ -1196,6 +1215,12 @@ function renderDailyTab() {
     <div class="kpi"><div class="kl">Expense</div><div class="kv r">${fmt(totExp)}</div></div>
     <div class="kpi"><div class="kl">Profit</div><div class="kv g">${fmt(totPl)}</div></div>`;
 
+  // Update card title & download button state
+  const titleEl = document.getElementById('daily-card-title');
+  const dlBtn   = document.getElementById('daily-dl-btn');
+  if (titleEl) titleEl.textContent = `${MONTHS[dailyMonth]} ${currentYear} — Entries`;
+  if (dlBtn)   dlBtn.disabled = !entries.length;
+
   if (!entries.length) { document.getElementById('daily-body').innerHTML = `<tr><td colspan="6" class="empty">No entries for ${MONTHS[dailyMonth]}. Tap + to add.</td></tr>`; return; }
 
   document.getElementById('daily-body').innerHTML = entries.map(e => {
@@ -1217,6 +1242,72 @@ function renderDailyTab() {
 function setDailyMonth(m) {
   dailyMonth = m;
   renderDailyTab();
+}
+
+// ── Download daily entries for selected month as XLSX ─
+function downloadDailyXLSX() {
+  const entries = getDailyForMonth(dailyMonth);
+  if (!entries.length) { toast('No entries to download'); return; }
+
+  const monthName = MONTHS[dailyMonth];
+  const year      = currentYear;
+
+  // Header row — matches the bulk upload column format exactly
+  const header = [
+    'Day', 'Date',
+    'Income (₹)', 'Expense (₹)', 'P&L (₹)',
+    'Salary', 'Interest', 'Dividend', 'Hedging', 'Other Income',
+    'Food', 'Cloths', 'Medical', 'Travel', 'Education', 'Rent', 'Other Expense',
+    'Note'
+  ];
+
+  const dataRows = entries.map(e => {
+    const ib = e.incBreak || {};
+    const eb = e.expBreak || {};
+    const mm = String(dailyMonth + 1).padStart(2, '0');
+    const dd = String(e.day).padStart(2, '0');
+    const dateStr = `${dd}-${mm}-${year}`;
+    return [
+      e.day,
+      dateStr,
+      e.income   || 0,
+      e.expense  || 0,
+      (e.income || 0) - (e.expense || 0),
+      ib.salary    || 0, ib.interest  || 0, ib.dividend || 0, ib.hedging || 0, ib.others || 0,
+      eb.food      || 0, eb.cloths    || 0, eb.medical  || 0, eb.travel  || 0,
+      eb.education || 0, eb.rent      || 0, eb.others   || 0,
+      e.note || ''
+    ];
+  });
+
+  // Totals row
+  const sum = (col) => dataRows.reduce((s, r) => s + (typeof r[col] === 'number' ? r[col] : 0), 0);
+  const totalRow = [
+    'TOTAL', '',
+    sum(2), sum(3), sum(4),
+    sum(5), sum(6), sum(7), sum(8), sum(9),
+    sum(10), sum(11), sum(12), sum(13), sum(14), sum(15), sum(16),
+    ''
+  ];
+
+  const wsData = [header, ...dataRows, totalRow];
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Column widths
+  ws['!cols'] = [
+    {wch:5},{wch:13},
+    {wch:13},{wch:13},{wch:12},
+    {wch:10},{wch:10},{wch:10},{wch:10},{wch:13},
+    {wch:8},{wch:8},{wch:10},{wch:9},{wch:12},{wch:8},{wch:14},
+    {wch:22}
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, monthName);
+  const fileName = `AHA_Daily_${monthName}_${year}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+  toast(`Downloaded ${fileName} ✓`);
 }
 
 // ════════════════════════════════════════════════════
@@ -1303,7 +1394,7 @@ function renderDashboard() {
   // Latest portfolio balance
   const portMonths = Object.keys(D.portfolio).map(k => parseInt(k.replace('m',''))).sort((a,b)=>b-a);
   const latestPort = portMonths.length ? D.portfolio[`m${portMonths[0]}`] : null;
-  const portTotal  = latestPort ? Object.values(latestPort).filter(v=>typeof v==='number').reduce((s,v)=>s+v,0) : 0;
+  const portTotal  = latestPort ? ASSET_KEYS.reduce((s,k)=>s+(latestPort[k]||0),0) : 0;
 
   document.getElementById('d-kpi1').innerHTML = `
     <div class="kpi"><div class="kl">YTD Income</div><div class="kv">${fmtK(ytdInc)}</div></div>
@@ -1589,20 +1680,42 @@ function renderInvest() {
     <div class="kpi"><div class="kl">Accrued (Active)</div><div class="kv sm" style="color:var(--org);">${fmtK(accruedInt)}</div></div>`;
   document.getElementById('gl-kpis').style.gridTemplateColumns = '1fr 1fr';
 
-  // Gold Loan cards — sort by date ascending
+  // Gold Loan cards — sort by date ascending, filter by loan number search
+  const searchQuery = (document.getElementById('gl-search')?.value || '').trim().toLowerCase();
   const sortedGL = [...D.gl].sort((a,b) => parseDateStr(a.date) - parseDateStr(b.date));
-  document.getElementById('gold-loans').innerHTML = !sortedGL.length ? '<div class="empty">No gold loans yet.</div>' :
-    sortedGL.map(g => {
+  const filteredGL = searchQuery
+    ? sortedGL.filter(g => (g.loanNo || '').toLowerCase().includes(searchQuery))
+    : sortedGL;
+
+  const glContainer = document.getElementById('gold-loans');
+  if (!sortedGL.length) {
+    glContainer.innerHTML = '<div class="empty">No gold loans yet.</div>';
+  } else if (!filteredGL.length) {
+    glContainer.innerHTML = `<div class="empty">No loan found matching "<strong>${searchQuery}</strong>".</div>`;
+  } else {
+    glContainer.innerHTML = filteredGL.map(g => {
       const isClosed = g.status === 'Closed';
       const todayForCalc = fmtDateISO(new Date());
       const numMonths = isClosed
         ? glMonthCount(g.date, g.releaseDate)
         : glMonthCount(g.date, todayForCalc);
       const calcInterest = numMonths * (g.capital||0) * (g.rate||1.5) / 100;
+      let loanNoHTML = '';
+      if (g.loanNo) {
+        if (searchQuery && g.loanNo.toLowerCase().includes(searchQuery)) {
+          const idx = g.loanNo.toLowerCase().indexOf(searchQuery);
+          const before = g.loanNo.slice(0, idx);
+          const match  = g.loanNo.slice(idx, idx + searchQuery.length);
+          const after  = g.loanNo.slice(idx + searchQuery.length);
+          loanNoHTML = `<div style="font-size:10px;font-weight:600;color:var(--gold);letter-spacing:.8px;text-transform:uppercase;margin-bottom:2px;"># ${before}<mark style="background:rgba(201,168,76,.35);color:var(--gold);border-radius:2px;padding:0 1px;">${match}</mark>${after}</div>`;
+        } else {
+          loanNoHTML = `<div style="font-size:10px;font-weight:600;color:var(--gold);letter-spacing:.8px;text-transform:uppercase;margin-bottom:2px;"># ${g.loanNo}</div>`;
+        }
+      }
       return `<div class="lcard">
         <div class="lt">
           <div>
-            ${g.loanNo ? `<div style="font-size:10px;font-weight:600;color:var(--gold);letter-spacing:.8px;text-transform:uppercase;margin-bottom:2px;"># ${g.loanNo}</div>` : ''}
+            ${loanNoHTML}
             <div class="ld">${fmtDate(g.date)}</div>
             <div class="la">₹${(g.capital||0).toLocaleString('en-IN')}</div>
           </div>
@@ -1623,6 +1736,7 @@ function renderInvest() {
         </div>
       </div>`;
     }).join('');
+  }
 }
 
 // ── Gold Loan CRUD ────────────────────────────────────
@@ -1880,6 +1994,10 @@ function showUploadPreview(data, type) {
     const totExp = data.reduce((s,r)=>s+r.expense,0);
     statsHTML += `<div class="pstat"><span class="pstat-val">${fmtK(totInc)}</span>Total Income</div>`;
     statsHTML += `<div class="pstat"><span class="pstat-val">${fmtK(totExp)}</span>Total Expense</div>`;
+  } else if (type === 'portfolio') {
+    const uniqueMonths = [...new Set(data.map(r => r.month))].length;
+    statsHTML += `<div class="pstat"><span class="pstat-val">${uniqueMonths}</span>Month(s)</div>`;
+    statsHTML += `<div class="pstat"><span class="pstat-val">✓</span>Saved per month</div>`;
   } else if (type === 'fd') {
     const totCap = data.reduce((s,r)=>s+r.capital,0);
     const totMo  = data.reduce((s,r)=>s+r.monthly,0);
@@ -1947,7 +2065,7 @@ async function confirmUpload() {
   const progPct  = document.getElementById('prog-pct');
 
   const setProgress = (done, label) => {
-    const pct = Math.round(done/total*100);
+    const pct = Math.round(done / total * 100);
     fill.style.width = pct + '%';
     progDone.textContent = label || `${done} / ${total} rows`;
     progPct.textContent  = pct + '%';
@@ -1957,12 +2075,11 @@ async function confirmUpload() {
   try {
     setSyncDot(false);
 
-    // ── STEP 1: Delete only the affected existing data ────────────────
-    // daily  → delete existing docs only for months present in upload
-    // portfolio → docs are keyed by month (m0–m11), batch.set overwrites — no pre-delete needed
-    // fd / goldloan → global collections; delete ALL existing docs then re-import
+    // ── STEP 1: Delete only affected existing data ────────────────────────
+    // daily      → delete existing docs only for months present in the upload file
+    // portfolio  → keyed docs (m0–m11); batch.set() overwrites — no pre-delete needed
+    // fd/goldloan→ global collections; clear ALL then re-import fresh
     if (type === 'daily') {
-      // Collect unique months in the upload file
       const uploadMonths = [...new Set(uploadParsed.map(r => r.month))];
       setProgress(0, 'Clearing old entries for affected months…');
       for (const m of uploadMonths) {
@@ -1978,9 +2095,9 @@ async function confirmUpload() {
       const snap = await globalCol('gl').get();
       await deleteQueryDocs(snap);
     }
-    // portfolio: no pre-delete — each month doc is set() by key (m0…m11), so it naturally overwrites
+    // portfolio: no pre-delete needed
 
-    // ── STEP 2: Write new data ────────────────────────────────────────
+    // ── STEP 2: Write new data ────────────────────────────────────────────
     const BATCH_SIZE = 400;
     let done = 0;
 
