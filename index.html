@@ -1535,9 +1535,10 @@ function renderHexGrid(portData, total) {
 
   const ICONS = ['🏦','💵','🥇','📈','💰','🛡️','🏠','📉','🛒','🔗'];
   const COLS  = ['#00bcd4','#607d8b','#9c27b0','#f44336','#ff9800','#0d7f6e','#1a6fc4','#d4600a','#be185d','#059669'];
+
   const assets = ASSET_KEYS.map((k,i) => ({
     key:k, label:ASSET_LABELS[i], icon:ICONS[i], color:COLS[i],
-    val:portData[k]||0,
+    val: portData[k]||0,
     pct: total>0 ? (portData[k]||0)/total*100 : 0
   }));
 
@@ -1546,150 +1547,162 @@ function renderHexGrid(portData, total) {
     return;
   }
 
-  const fmtVal = v => v>=1e7?(v/1e7).toFixed(1)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+v;
-  const fmtTot = v => v>=1e7?(v/1e7).toFixed(2)+'Cr':v>=1e5?(v/1e5).toFixed(2)+'L':'₹'+v.toLocaleString('en-IN');
+  const fmtV = v => v>=1e7?(v/1e7).toFixed(1)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+v.toLocaleString('en-IN');
+  const fmtT = v => v>=1e7?(v/1e7).toFixed(2)+'Cr':v>=1e5?(v/1e5).toFixed(2)+'L':'₹'+v.toLocaleString('en-IN');
 
-  // Sort by value desc; top 5 get the petal rings, rest go in bottom strip
+  // Sort descending; top 5 → petal rings, rest → bottom list
   const sorted = [...assets].sort((a,b) => b.val - a.val);
-  const top5   = sorted.slice(0, 5);
-  const rest   = sorted.slice(5);
+  const top5 = sorted.slice(0,5);
+  const rest  = sorted.slice(5);
 
-  // ── SVG geometry ──────────────────────────────────────────────────────────
-  // Pentagon layout: 5 circles arranged around a central point
-  // Each petal: outer ring R=54, inner white circle r=38
-  // Centre of pentagon at (cx,cy); petals placed at radius dist from centre
+  // ── Geometry ──────────────────────────────────────────────────────
+  // viewBox sized to contain all 5 petals + padding
+  // Pentagon: top petal at -90°, then +72° each
+  // ORBIT = distance from SVG centre to each petal centre
+  // Each petal: coloured outer arc (strokeW thick) + white inner circle (r=INNER)
+  const VW = 300, VH = 300;
+  const CX = VW/2, CY = VH/2;
+  const ORBIT = 90;          // petal centre distance from SVG centre
+  const INNER = 40;          // inner white circle radius
+  const ARC_R = 52;          // arc path radius (mid of stroke)
+  const ARC_W = 22;          // arc stroke width → outer edge = ARC_R+ARC_W/2 = 63
+  const DASH_R = 28;         // central dashed ring radius
 
-  const W = 310, H = 290;
-  const cx = W/2, cy = H/2 - 4;
-  const ORBIT  = 88;   // distance from centre to each petal centre
-  const OUTER  = 52;   // petal outer ring radius
-  const INNER  = 37;   // petal inner white circle radius
-  const ARC_W  = OUTER - INNER;  // ring stroke width
+  // Pentagon angles (top first)
+  const PA = Array.from({length:5}, (_,i) => -Math.PI/2 + i * 2*Math.PI/5);
+  const PC = PA.map(a => ({ x: CX + ORBIT*Math.cos(a), y: CY + ORBIT*Math.sin(a), a }));
 
-  // Pentagon angles: top petal at -90° then every 72°
-  const angles = [0,1,2,3,4].map(i => -Math.PI/2 + i * 2*Math.PI/5);
-  const petalCentres = angles.map(a => ({
-    x: cx + ORBIT * Math.cos(a),
-    y: cy + ORBIT * Math.sin(a)
-  }));
-
-  // Arc sweep helper — arc covers ~75% of circle to leave a gap (like reference)
-  function petalArc(px, py, r, color, pct, rotOffset) {
-    const sweepDeg = 270; // 270° filled arc = gap of 90° at bottom-left
-    const sweep = sweepDeg / 360;
-    const startA = rotOffset;
-    const endA   = startA + sweep * 2 * Math.PI;
-    const x0 = px + r * Math.cos(startA), y0 = py + r * Math.sin(startA);
-    const x1 = px + r * Math.cos(endA),   y1 = py + r * Math.sin(endA);
-    const large = sweep > 0.5 ? 1 : 0;
-    const bg = `<circle cx="${px}" cy="${py}" r="${r}" fill="none"
-      stroke="${color}" stroke-width="${ARC_W}" stroke-opacity="0.1"/>`;
-    const arc = `<path d="M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${large},1 ${x1.toFixed(2)},${y1.toFixed(2)}"
-      fill="none" stroke="${color}" stroke-width="${ARC_W}"
-      stroke-linecap="round" filter="url(#ps)"/>`;
-    // data bar inside ring: a smaller arc showing pct fill
-    const dataR = r - ARC_W/2 - 1;
-    return bg + arc;
+  // ── SVG arc path for a petal ─────────────────────────────────────
+  // The gap (≈90°) faces the SVG centre.
+  // Arc goes 270° starting just after the gap end, sweeping clockwise.
+  // Gap centre = angle FROM petal TO svg centre
+  function petalPath(px, py, petalAngle, r) {
+    const towardCentre = Math.atan2(CY - py, CX - px); // angle pointing to centre
+    const gapHalf = (Math.PI/2) * 0.52; // half-gap = 47°
+    const arcStart = towardCentre + gapHalf;           // start just after gap
+    const arcEnd   = towardCentre - gapHalf + 2*Math.PI; // end just before gap (going clockwise = 270°)
+    const sweep    = (2*Math.PI - 2*gapHalf);          // ~270°
+    const x0 = px + r*Math.cos(arcStart), y0 = py + r*Math.sin(arcStart);
+    const x1 = px + r*Math.cos(arcEnd),   y1 = py + r*Math.sin(arcEnd);
+    const lg = sweep > Math.PI ? 1 : 0;
+    return `M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${lg},1 ${x1.toFixed(2)},${y1.toFixed(2)}`;
   }
 
-  // Drop shadow filter for petal circles
+  // ── Build pointer tip (triangle pointing to centre) ───────────────
+  // Two small points at gap edges + a tip at the gap midpoint on inner circle
+  function pointerTip(px, py, color) {
+    const toC = Math.atan2(CY-py, CX-px);
+    const gapHalf = Math.PI/2 * 0.52;
+    // tip = point at inner edge of arc, aimed at centre
+    const tipR = ARC_R - ARC_W/2;
+    const tx = px + tipR*Math.cos(toC), ty = py + tipR*Math.sin(toC);
+    // left & right base points at gap edges, at arc mid-radius
+    const lx = px + ARC_R*Math.cos(toC-gapHalf), ly = py + ARC_R*Math.sin(toC-gapHalf);
+    const rx = px + ARC_R*Math.cos(toC+gapHalf), ry = py + ARC_R*Math.sin(toC+gapHalf);
+    return `<polygon points="${tx.toFixed(1)},${ty.toFixed(1)} ${lx.toFixed(1)},${ly.toFixed(1)} ${rx.toFixed(1)},${ry.toFixed(1)}"
+      fill="${color}" opacity="0.85"/>`;
+  }
+
+  // ── Assemble SVG ─────────────────────────────────────────────────
   const defs = `<defs>
-    <filter id="ps" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="1" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.18)"/>
+    <filter id="shd" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.16"/>
     </filter>
-    <filter id="cs" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="1" stdDeviation="4" flood-color="rgba(0,0,0,0.12)"/>
+    <filter id="shd2" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.10"/>
     </filter>
   </defs>`;
 
-  // Build 5 petals
-  let petalsSVG = '';
+  let svg = '';
+
+  // Draw each petal
   top5.forEach((a, i) => {
-    const {x, y} = petalCentres[i];
-    // rotate gap away from centre connection point
-    const gapAngle = Math.atan2(cy - y, cx - x); // direction toward centre
-    const rotOffset = gapAngle + Math.PI * 0.62;   // start arc after gap
+    const {x, y} = PC[i];
+    const col = a.val > 0 ? a.color : '#d0d0d0';
 
-    const hasVal = a.val > 0;
-    const col = hasVal ? a.color : '#cccccc';
+    // Outer arc (coloured ring)
+    svg += `<path d="${petalPath(x, y, PC[i].a, ARC_R)}"
+      fill="none" stroke="${col}" stroke-width="${ARC_W}"
+      stroke-linecap="butt" filter="url(#shd2)"/>`;
 
-    petalsSVG += petalArc(x, y, (INNER + OUTER)/2, col, a.pct/100, rotOffset);
+    // Pointer triangle in the gap
+    svg += pointerTip(x, y, col);
 
-    // White inner circle with shadow
-    petalsSVG += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${INNER}"
-      fill="var(--bg1,#fff)" filter="url(#ps)" stroke="var(--bg3)" stroke-width="0.5"/>`;
+    // Inner white circle (large, with strong shadow)
+    svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${INNER}"
+      fill="var(--bg1,#ffffff)" filter="url(#shd)" stroke="none"/>`;
 
     // Icon
-    petalsSVG += `<text x="${x.toFixed(1)}" y="${(y-10).toFixed(1)}"
-      text-anchor="middle" font-size="14" font-family="DM Sans,sans-serif">${a.icon}</text>`;
+    svg += `<text x="${x.toFixed(1)}" y="${(y - 12).toFixed(1)}"
+      text-anchor="middle" dominant-baseline="middle"
+      font-size="16" font-family="DM Sans,sans-serif">${a.icon}</text>`;
 
     // Label
-    petalsSVG += `<text x="${x.toFixed(1)}" y="${(y+4).toFixed(1)}"
-      text-anchor="middle" font-size="7" font-weight="600" fill="${col}"
-      font-family="DM Sans,sans-serif">${a.label}</text>`;
+    svg += `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}"
+      text-anchor="middle" font-size="7" font-weight="600"
+      fill="${col}" font-family="DM Sans,sans-serif">${a.label}</text>`;
 
     // Value
-    const valStr = hasVal ? fmtVal(a.val) : '—';
-    petalsSVG += `<text x="${x.toFixed(1)}" y="${(y+15).toFixed(1)}"
-      text-anchor="middle" font-size="7.5" font-weight="700" fill="var(--text,#222)"
-      font-family="DM Sans,sans-serif">${hasVal?'₹':''}${hasVal?fmtVal(a.val):'—'}</text>`;
+    svg += `<text x="${x.toFixed(1)}" y="${(y + 15).toFixed(1)}"
+      text-anchor="middle" font-size="8" font-weight="700"
+      fill="var(--text,#1a1a1a)" font-family="DM Sans,sans-serif">
+      ${a.val > 0 ? '₹'+fmtV(a.val) : '—'}</text>`;
 
-    // Pct badge
-    if (hasVal) {
-      petalsSVG += `<text x="${x.toFixed(1)}" y="${(y+26).toFixed(1)}"
-        text-anchor="middle" font-size="6.5" fill="${col}" font-family="DM Sans,sans-serif"
-        opacity="0.85">${a.pct.toFixed(1)}%</text>`;
+    // Percentage
+    if (a.val > 0) {
+      svg += `<text x="${x.toFixed(1)}" y="${(y + 26).toFixed(1)}"
+        text-anchor="middle" font-size="6.5" fill="${col}" opacity="0.9"
+        font-family="DM Sans,sans-serif">${a.pct.toFixed(1)}%</text>`;
     }
   });
 
-  // Centre dashed circle + dot connectors (like reference)
-  const CDASH_R = 32;
-  const centreSVG = `
-    <circle cx="${cx}" cy="${cy}" r="${CDASH_R}"
-      fill="none" stroke="var(--muted,#aaa)" stroke-width="1"
-      stroke-dasharray="3,3" opacity="0.5"/>`;
+  // Central dashed ring
+  svg += `<circle cx="${CX}" cy="${CY}" r="${DASH_R}"
+    fill="none" stroke="var(--muted,#bbb)" stroke-width="1.2"
+    stroke-dasharray="3,3" opacity="0.6"/>`;
 
-  // Dots where petals meet the dashed circle
-  const dotsSVG = top5.map((a,i) => {
-    const ang = angles[i];
-    const dx = cx + CDASH_R * Math.cos(ang);
-    const dy = cy + CDASH_R * Math.sin(ang);
-    return `<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="4"
-      fill="var(--bg1,#fff)" stroke="${a.val>0?a.color:'#ccc'}" stroke-width="1.5"/>
-    <circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="2"
-      fill="${a.val>0?a.color:'#ccc'}"/>`;
-  }).join('');
+  // Connection dots (where each petal line meets the dashed ring)
+  top5.forEach((a, i) => {
+    const ang = PA[i];
+    const dx = CX + DASH_R*Math.cos(ang), dy = CY + DASH_R*Math.sin(ang);
+    const col = a.val > 0 ? a.color : '#ccc';
+    svg += `<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="5"
+      fill="var(--bg1,#fff)" stroke="${col}" stroke-width="1.5"/>
+    <circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="2.5" fill="${col}"/>`;
+  });
 
-  // Centre total text (no circle — just text in the middle of dashes)
-  const totalSVG = `
-    <text x="${cx}" y="${cy-7}" text-anchor="middle" font-size="6.5"
-      fill="var(--muted,#888)" font-family="DM Sans,sans-serif" letter-spacing="0.5">TOTAL</text>
-    <text x="${cx}" y="${cy+5}" text-anchor="middle" font-size="9.5" font-weight="700"
-      fill="var(--text,#222)" font-family="DM Sans,sans-serif">${fmtTot(total)}</text>`;
+  // Centre total text
+  svg += `<text x="${CX}" y="${CY - 6}" text-anchor="middle"
+    font-size="6" fill="var(--muted,#999)" letter-spacing="0.8"
+    font-family="DM Sans,sans-serif">TOTAL</text>
+  <text x="${CX}" y="${CY + 7}" text-anchor="middle"
+    font-size="9" font-weight="700" fill="var(--text,#1a1a1a)"
+    font-family="DM Sans,sans-serif">${fmtT(total)}</text>`;
 
-  // ── Bottom strip for remaining 5 assets ──────────────────────────────────
+  // ── Bottom list for remaining 5 assets ────────────────────────────
   const restHTML = rest.map(a => {
     const hasVal = a.val > 0;
     return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:0;">
-      <div style="width:32px;height:32px;border-radius:50%;border:2.5px solid ${hasVal?a.color:'var(--bg3)'};
-           background:var(--bg2);display:flex;align-items:center;justify-content:center;
-           font-size:14px;box-shadow:0 1px 4px rgba(0,0,0,.1);">${a.icon}</div>
-      <div style="font-size:8px;color:var(--muted);text-align:center;line-height:1.2;max-width:48px;">${a.label}</div>
-      <div style="font-size:8px;font-weight:700;color:${hasVal?a.color:'var(--muted)'};">${hasVal?'₹'+fmtVal(a.val):'—'}</div>
-      ${hasVal?`<div style="font-size:7px;color:var(--muted);">${a.pct.toFixed(1)}%</div>`:''}
+      <div style="width:34px;height:34px;border-radius:50%;
+           border:2.5px solid ${hasVal ? a.color : 'var(--bg3)'};
+           background:var(--bg1,#fff);display:flex;align-items:center;justify-content:center;
+           font-size:15px;box-shadow:0 2px 5px rgba(0,0,0,.1);">${a.icon}</div>
+      <div style="font-size:8px;color:var(--muted);text-align:center;line-height:1.2;max-width:50px;margin-top:1px;">${a.label}</div>
+      <div style="font-size:8px;font-weight:700;color:${hasVal ? a.color : 'var(--muted)'};">${hasVal ? '₹'+fmtV(a.val) : '—'}</div>
+      ${hasVal ? `<div style="font-size:7px;color:var(--muted);">${a.pct.toFixed(1)}%</div>` : ''}
     </div>`;
   }).join('');
 
   wrap.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" width="100%" height="auto" style="display:block;overflow:visible;">
-      ${defs}
-      ${petalsSVG}
-      ${centreSVG}
-      ${dotsSVG}
-      ${totalSVG}
+    <svg viewBox="0 0 ${VW} ${VH}" width="100%" height="auto"
+         style="display:block;overflow:visible;max-width:320px;margin:0 auto;">
+      ${defs}${svg}
     </svg>
-    ${rest.length ? `<div style="display:flex;justify-content:space-around;align-items:flex-start;
-        padding:8px 4px 4px;border-top:1px solid var(--bg3);margin-top:4px;gap:4px;">${restHTML}</div>` : ''}`;
+    ${rest.length ? `
+    <div style="display:flex;justify-content:space-around;align-items:flex-start;
+         padding:10px 4px 2px;border-top:1px solid var(--bg3);margin-top:6px;gap:4px;">
+      ${restHTML}
+    </div>` : ''}`;
 }
 
 function setPortMonth(m) { portMonth = m; renderPortfolio(); }
