@@ -1570,8 +1570,8 @@ function renderHexGrid(portData, total) {
   // Outer ring petals — rotated 36° so they sit between inner petals
   const O_ORBIT = 138;  // outer petal centre distance from SVG centre
   const O_INNER = 28;   // outer white circle radius
-  const O_ARC_R = 37;   // arc stroke mid-radius
-  const O_ARC_W = 16;   // arc stroke width
+  const O_ARC_R = 32;   // arc stroke mid-radius (just outside inner circle)
+  const O_ARC_W = 2;    // arc stroke width — thin 2px ring
 
   const DASH_R = 22;    // central dashed ring radius
 
