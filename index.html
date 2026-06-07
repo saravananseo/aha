@@ -681,7 +681,7 @@ tr:hover td{background:var(--gold-dim);}
       <div class="card"><div class="card-title">Monthly P&amp;L Trend</div><div class="ch h180"><canvas id="cPnl"></canvas></div></div>
       <div class="card"><div class="card-title">Savings Rate by Month</div><div id="d-savings"></div></div>
       <div class="card"><div class="card-title">YTD Expense Breakdown</div><div class="ch h200"><canvas id="cExp"></canvas></div></div>
-      <div class="card" style="padding:14px 14px 10px;"><div class="card-title">Income Sources</div><div id="d-inc-src"></div></div>
+      <div class="card"><div class="card-title">Income Sources</div><div id="d-inc-src"></div></div>
     </div>
 
     <!-- ═══ DAILY ═══ -->
@@ -1372,138 +1372,19 @@ function renderDashboard() {
   document.getElementById('d-savings').innerHTML = savHTML || '<div class="empty">No data yet for '+currentYear+'</div>';
 
   // Income source — spiral concentric ring chart
-  drawIncomeSpiral(incBreak);
+  // Income source bars
+  const incTotal = Object.values(incBreak).reduce((s,v)=>s+v,0);
+  let incHTML = '';
+  Object.entries(incBreak).forEach(([k,v]) => {
+    if (!v) return;
+    const pct = incTotal > 0 ? (v/incTotal*100) : 0;
+    incHTML += `<div class="pr-row"><div class="pr-l" style="text-transform:capitalize;">${k}</div><div class="pr-bar"><div class="pr-f" style="width:${pct.toFixed(1)}%"></div></div><div class="pr-p">${fmtK(v)}</div></div>`;
+  });
+  document.getElementById('d-inc-src').innerHTML = incHTML || '<div class="empty">No income data yet</div>';
 
   // Charts
   drawPnlChart();
   drawExpChart(expBreak);
-}
-
-function drawIncomeSpiral(incBreak) {
-  const wrap = document.getElementById('d-inc-src');
-  if (!wrap) return;
-
-  const INC_KEYS   = ['salary','interest','dividend','hedging','others'];
-  const INC_LABELS = ['Salary','Interest','Dividend','Hedging','Others'];
-  const INC_ICONS  = ['💼','🏦','📊','🛡️','💡'];
-  const COLORS     = ['#0d7f6e','#1a6fc4','#d4600a','#6332b8','#be185d'];
-
-  const incTotal = Object.values(incBreak).reduce((s,v)=>s+v,0);
-  if (!incTotal) { wrap.innerHTML = '<div class="empty" style="padding:20px 0">No income data yet</div>'; return; }
-
-  const entries = INC_KEYS
-    .map((k,i) => ({ label:INC_LABELS[i], icon:INC_ICONS[i], color:COLORS[i], val:incBreak[k]||0 }))
-    .filter(e => e.val > 0)
-    .sort((a,b) => b.val - a.val);
-
-  const N = entries.length;
-
-  // ── Layout constants ─────────────────────────────────────────────
-  // SVG is 320×260, fully self-contained — no overflow
-  const W = 320, H = 260;
-  // Rings centered at right portion; left ~120px reserved for labels
-  const LABEL_W = 118;          // width of left label column
-  const cx = LABEL_W + 6;      // ring center x  (just right of label zone)
-  const cy = H / 2;            // ring center y  (vertical centre)
-  const INNER_R = 28;          // innermost hollow radius
-  const RING_H  = 18;          // stroke width of each ring
-  const RING_GAP = 6;          // gap between rings
-  // Outermost ring must stay within SVG: cx + outerR + RING_H/2 <= W
-  const maxOuterR = W - cx - RING_H / 2 - 4;
-  // Compute per-ring radius (innermost ring = index 0 = largest value)
-  const rings = entries.map((e, i) => {
-    const r = INNER_R + RING_H / 2 + i * (RING_H + RING_GAP);
-    return { ...e, pct: e.val / incTotal, r: Math.min(r, maxOuterR - i * 2) };
-  });
-
-  // ── Arc path: starts at top (−90°), sweeps clockwise by pct*360° ─
-  function arc(r, pct) {
-    if (pct >= 0.9999) pct = 0.9999;
-    const a0 = -Math.PI / 2;
-    const a1 = a0 + pct * 2 * Math.PI;
-    const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
-    const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
-    return `M${x0},${y0} A${r},${r} 0 ${pct>0.5?1:0},1 ${x1},${y1}`;
-  }
-
-  // ── SVG pieces ───────────────────────────────────────────────────
-  // 1. Background tracks (full faded circles)
-  const tracks = rings.map(rg =>
-    `<circle cx="${cx}" cy="${cy}" r="${rg.r}" fill="none"
-       stroke="${rg.color}" stroke-width="${RING_H}" stroke-opacity="0.08"/>`
-  ).join('');
-
-  // 2. Coloured arcs
-  const arcs = rings.map(rg =>
-    `<path d="${arc(rg.r, rg.pct)}" fill="none"
-       stroke="${rg.color}" stroke-width="${RING_H}" stroke-linecap="round" opacity="0.9">
-       <title>${rg.label}: ₹${rg.val.toLocaleString('en-IN')} (${(rg.pct*100).toFixed(1)}%)</title>
-     </path>`
-  ).join('');
-
-  // 3. Ring index numbers at arc end-point (bottom-right area)
-  const nums = rings.map((rg, i) => {
-    const endAngle = -Math.PI/2 + rg.pct * 2 * Math.PI;
-    // Place number just outside the arc end
-    const nr = rg.r + RING_H/2 + 7;
-    const nx = cx + nr * Math.cos(endAngle);
-    const ny = cy + nr * Math.sin(endAngle);
-    // Keep inside SVG bounds
-    const clampedNx = Math.min(nx, W - 10);
-    const clampedNy = Math.max(10, Math.min(ny, H - 6));
-    return `<text x="${clampedNx.toFixed(1)}" y="${(clampedNy+3).toFixed(1)}"
-      text-anchor="middle" font-size="7.5" font-weight="700"
-      fill="${rg.color}" font-family="DM Sans,sans-serif">0${i+1}</text>`;
-  }).join('');
-
-  // 4. Centre circle with total
-  const fmt = v => v>=1e7?(v/1e7).toFixed(1)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+v;
-  const centre = `
-    <circle cx="${cx}" cy="${cy}" r="${INNER_R-2}" fill="url(#incGrad2)"/>
-    <text x="${cx}" y="${cy-7}" text-anchor="middle" font-size="6.5"
-      fill="rgba(255,255,255,.75)" font-family="DM Sans,sans-serif" letter-spacing="0.5">INCOME</text>
-    <text x="${cx}" y="${cy+3}" text-anchor="middle" font-size="8.5" font-weight="700"
-      fill="#fff" font-family="DM Sans,sans-serif">${fmt(incTotal)}</text>`;
-
-  // 5. Left label column — stacked rows, each: icon circle + pct bold + label + value
-  const rowH   = Math.min(44, (H - 20) / N);
-  const startY = cy - ((N - 1) / 2) * rowH;
-  const labels = rings.map((rg, i) => {
-    const ly   = startY + i * rowH;
-    const pctS = (rg.pct * 100).toFixed(1) + '%';
-    const valS = rg.val>=1e5?(rg.val/1e5).toFixed(1)+'L':rg.val>=1e3?(rg.val/1e3).toFixed(0)+'K':'₹'+rg.val.toLocaleString('en-IN');
-    // Connector dot on ring left edge → horizontal line → label
-    const dotX = cx - rg.r;
-    const lineEndX = LABEL_W - 2;
-    return `
-      <circle cx="${dotX}" cy="${cy}" r="2.5" fill="${rg.color}"/>
-      <line x1="${dotX}" y1="${cy}" x2="${lineEndX}" y2="${ly}"
-        stroke="${rg.color}" stroke-width="0.6" stroke-opacity="0.45" stroke-dasharray="2,2"/>
-      <circle cx="10" cy="${ly}" r="9" fill="${rg.color}" fill-opacity="0.12"/>
-      <text x="10" y="${ly+4}" text-anchor="middle" font-size="9"
-        fill="${rg.color}" font-family="DM Sans,sans-serif">${rg.icon}</text>
-      <text x="23" y="${ly-5}" font-size="9" font-weight="700"
-        fill="${rg.color}" font-family="DM Sans,sans-serif">${pctS}</text>
-      <text x="23" y="${ly+6}" font-size="7.5"
-        fill="#888" font-family="DM Sans,sans-serif">${rg.label}</text>
-      <text x="23" y="${ly+15}" font-size="7"
-        fill="#aaa" font-family="DM Sans,sans-serif">${valS}</text>`;
-  }).join('');
-
-  wrap.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" width="100%" height="auto"
-         style="display:block;overflow:hidden;max-width:100%;">
-      <defs>
-        <radialGradient id="incGrad2" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#1a6fc4"/>
-          <stop offset="100%" stop-color="#0d7f6e"/>
-        </radialGradient>
-        <clipPath id="incClip"><rect width="${W}" height="${H}"/></clipPath>
-      </defs>
-      <g clip-path="url(#incClip)">
-        ${tracks}${arcs}${centre}${labels}${nums}
-      </g>
-    </svg>`;
 }
 
 function drawPnlChart() {
