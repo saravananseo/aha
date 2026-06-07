@@ -621,31 +621,7 @@ tr:hover td{background:var(--gold-dim);}
 .uhist-meta{color:var(--dim);font-size:10px;margin-top:2px;}
 .uhist-badge{font-size:10px;padding:2px 8px;border-radius:20px;}
 
-/* ── Hex infographic ──────────────────────────────── */
-.hex-wrap{display:flex;flex-direction:column;align-items:center;gap:0;}
-.hex-row{display:flex;justify-content:center;gap:6px;margin:-6px 0;}
-.hex-cell{display:flex;flex-direction:column;align-items:center;width:80px;}
-.hexagon{position:relative;width:68px;height:39px;background:linear-gradient(145deg,var(--bg3),var(--bg2));margin:19px 0;cursor:default;filter:drop-shadow(0 2px 4px rgba(0,0,0,.18));transition:transform .2s;}
-.hexagon::before,.hexagon::after{content:"";position:absolute;left:0;right:0;border-left:34px solid transparent;border-right:34px solid transparent;}
-.hexagon::before{bottom:100%;border-bottom:19px solid var(--bg3);}
-.hexagon::after{top:100%;border-top:19px solid var(--bg3);}
-.hexagon.active{background:linear-gradient(145deg,#0d7f6e,#0a5e52);}
-.hexagon.active::before{border-bottom-color:#0d7f6e;}
-.hexagon.active::after{border-top-color:#0a5e52;}
-.hexagon.zero{opacity:.45;}
-.hex-inner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;}
-.hex-icon{font-size:18px;line-height:1;}
-.hex-center-wrap{position:relative;width:110px;height:110px;margin:4px 0;}
-.hex-center-circle{width:110px;height:110px;border-radius:50%;background:linear-gradient(135deg,#0d7f6e 0%,#1a6fc4 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 0 0 6px rgba(13,127,110,.15),0 0 0 12px rgba(13,127,110,.07);position:relative;}
-.hex-center-circle::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:2px dashed rgba(255,255,255,.3);}
-.hex-cval{font-size:13px;font-weight:700;color:#fff;line-height:1.2;letter-spacing:.3px;}
-.hex-clbl{font-size:9px;color:rgba(255,255,255,.75);letter-spacing:.8px;text-transform:uppercase;margin-top:2px;}
-.hex-name{font-size:8.5px;color:var(--muted);text-align:center;line-height:1.2;margin-top:2px;max-width:72px;}
-.hex-val{font-size:8px;font-weight:600;color:var(--text);text-align:center;}
-.hex-pct{font-size:8px;color:var(--gold);text-align:center;}
-.hex-progress-strip{display:flex;gap:3px;justify-content:center;margin:6px 0 0;}
-.hex-progress-dot{width:6px;height:6px;border-radius:50%;background:var(--bg3);transition:background .4s;}
-.hex-progress-dot.on{background:var(--gold);}
+/* ── Asset petal chart uses inline SVG styles ── */
 </style>
 </head>
 <body>
@@ -1413,118 +1389,121 @@ function drawIncomeSpiral(incBreak) {
   const COLORS     = ['#0d7f6e','#1a6fc4','#d4600a','#6332b8','#be185d'];
 
   const incTotal = Object.values(incBreak).reduce((s,v)=>s+v,0);
-  if (!incTotal) { wrap.innerHTML = '<div class="empty">No income data yet</div>'; return; }
+  if (!incTotal) { wrap.innerHTML = '<div class="empty" style="padding:20px 0">No income data yet</div>'; return; }
 
-  // Build sorted entries (largest first)
   const entries = INC_KEYS
-    .map((k,i) => ({ key:k, label:INC_LABELS[i], icon:INC_ICONS[i], color:COLORS[i], val:incBreak[k]||0 }))
+    .map((k,i) => ({ label:INC_LABELS[i], icon:INC_ICONS[i], color:COLORS[i], val:incBreak[k]||0 }))
     .filter(e => e.val > 0)
     .sort((a,b) => b.val - a.val);
 
   const N = entries.length;
-  // SVG dimensions
-  const W = 340, H = 300;
-  const cx = W * 0.58, cy = H * 0.46;
-  const minR = 32, ringW = 22, gap = 8;
 
-  // Each ring radius (innermost = largest value)
-  const rings = entries.map((e,i) => ({
-    ...e,
-    pct: e.val / incTotal,
-    r: minR + i * (ringW + gap) + ringW / 2,
-    strokeW: ringW
-  }));
+  // ── Layout constants ─────────────────────────────────────────────
+  // SVG is 320×260, fully self-contained — no overflow
+  const W = 320, H = 260;
+  // Rings centered at right portion; left ~120px reserved for labels
+  const LABEL_W = 118;          // width of left label column
+  const cx = LABEL_W + 6;      // ring center x  (just right of label zone)
+  const cy = H / 2;            // ring center y  (vertical centre)
+  const INNER_R = 28;          // innermost hollow radius
+  const RING_H  = 18;          // stroke width of each ring
+  const RING_GAP = 6;          // gap between rings
+  // Outermost ring must stay within SVG: cx + outerR + RING_H/2 <= W
+  const maxOuterR = W - cx - RING_H / 2 - 4;
+  // Compute per-ring radius (innermost ring = index 0 = largest value)
+  const rings = entries.map((e, i) => {
+    const r = INNER_R + RING_H / 2 + i * (RING_H + RING_GAP);
+    return { ...e, pct: e.val / incTotal, r: Math.min(r, maxOuterR - i * 2) };
+  });
 
-  const maxR = rings.length ? rings[rings.length-1].r + ringW/2 + 4 : minR + 20;
-
-  // arc path helper (SVG arc for a fraction of a circle, starting from top = -90deg)
-  function arcPath(cx, cy, r, pct) {
+  // ── Arc path: starts at top (−90°), sweeps clockwise by pct*360° ─
+  function arc(r, pct) {
     if (pct >= 0.9999) pct = 0.9999;
-    const startAngle = -Math.PI / 2;
-    const endAngle   = startAngle + pct * 2 * Math.PI;
-    const x1 = cx + r * Math.cos(startAngle);
-    const y1 = cy + r * Math.sin(startAngle);
-    const x2 = cx + r * Math.cos(endAngle);
-    const y2 = cy + r * Math.sin(endAngle);
-    const large = pct > 0.5 ? 1 : 0;
-    return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+    const a0 = -Math.PI / 2;
+    const a1 = a0 + pct * 2 * Math.PI;
+    const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+    const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+    return `M${x0},${y0} A${r},${r} 0 ${pct>0.5?1:0},1 ${x1},${y1}`;
   }
 
-  // Build SVG rings
-  let ringsSVG = '';
-  // Track background rings (full circle, faded)
-  rings.forEach(ring => {
-    ringsSVG += `<circle cx="${cx}" cy="${cy}" r="${ring.r}" fill="none"
-      stroke="${ring.color}" stroke-width="${ring.strokeW}"
-      stroke-opacity="0.1" />`;
-  });
-  // Filled arcs
-  rings.forEach(ring => {
-    ringsSVG += `<path d="${arcPath(cx, cy, ring.r, ring.pct)}"
-      fill="none" stroke="${ring.color}" stroke-width="${ring.strokeW}"
-      stroke-linecap="round" opacity="0.92">
-      <title>${ring.label}: ₹${ring.val.toLocaleString('en-IN')} (${(ring.pct*100).toFixed(1)}%)</title>
-    </path>`;
-  });
+  // ── SVG pieces ───────────────────────────────────────────────────
+  // 1. Background tracks (full faded circles)
+  const tracks = rings.map(rg =>
+    `<circle cx="${cx}" cy="${cy}" r="${rg.r}" fill="none"
+       stroke="${rg.color}" stroke-width="${RING_H}" stroke-opacity="0.08"/>`
+  ).join('');
 
-  // Center circle
-  const centerFmt = incTotal >= 1e7 ? (incTotal/1e7).toFixed(1)+'Cr'
-                  : incTotal >= 1e5 ? (incTotal/1e5).toFixed(1)+'L'
-                  : '₹'+incTotal.toLocaleString('en-IN');
-  ringsSVG += `
-    <circle cx="${cx}" cy="${cy}" r="${minR-4}" fill="url(#incGrad)" opacity="0.95"/>
-    <text x="${cx}" y="${cy-6}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.8)" font-family="DM Sans,sans-serif" letter-spacing="0.5">TOTAL</text>
-    <text x="${cx}" y="${cy+6}" text-anchor="middle" font-size="10" fill="#fff" font-weight="700" font-family="DM Sans,sans-serif">${centerFmt}</text>`;
+  // 2. Coloured arcs
+  const arcs = rings.map(rg =>
+    `<path d="${arc(rg.r, rg.pct)}" fill="none"
+       stroke="${rg.color}" stroke-width="${RING_H}" stroke-linecap="round" opacity="0.9">
+       <title>${rg.label}: ₹${rg.val.toLocaleString('en-IN')} (${(rg.pct*100).toFixed(1)}%)</title>
+     </path>`
+  ).join('');
 
-  // Left-side callout labels
-  let labelsSVG = '';
-  const leftX = 8;
-  const labelStep = Math.min(48, (H - 40) / Math.max(N,1));
-  const startY = cy - ((N-1)/2) * labelStep;
+  // 3. Ring index numbers at arc end-point (bottom-right area)
+  const nums = rings.map((rg, i) => {
+    const endAngle = -Math.PI/2 + rg.pct * 2 * Math.PI;
+    // Place number just outside the arc end
+    const nr = rg.r + RING_H/2 + 7;
+    const nx = cx + nr * Math.cos(endAngle);
+    const ny = cy + nr * Math.sin(endAngle);
+    // Keep inside SVG bounds
+    const clampedNx = Math.min(nx, W - 10);
+    const clampedNy = Math.max(10, Math.min(ny, H - 6));
+    return `<text x="${clampedNx.toFixed(1)}" y="${(clampedNy+3).toFixed(1)}"
+      text-anchor="middle" font-size="7.5" font-weight="700"
+      fill="${rg.color}" font-family="DM Sans,sans-serif">0${i+1}</text>`;
+  }).join('');
 
-  rings.forEach((ring, i) => {
-    const ly = startY + i * labelStep;
-    const pctStr = (ring.pct * 100).toFixed(1) + '%';
-    const valStr = ring.val >= 1e5 ? (ring.val/1e5).toFixed(1)+'L'
-                 : ring.val >= 1e3 ? (ring.val/1e3).toFixed(0)+'K'
-                 : ring.val.toLocaleString('en-IN');
+  // 4. Centre circle with total
+  const fmt = v => v>=1e7?(v/1e7).toFixed(1)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+v;
+  const centre = `
+    <circle cx="${cx}" cy="${cy}" r="${INNER_R-2}" fill="url(#incGrad2)"/>
+    <text x="${cx}" y="${cy-7}" text-anchor="middle" font-size="6.5"
+      fill="rgba(255,255,255,.75)" font-family="DM Sans,sans-serif" letter-spacing="0.5">INCOME</text>
+    <text x="${cx}" y="${cy+3}" text-anchor="middle" font-size="8.5" font-weight="700"
+      fill="#fff" font-family="DM Sans,sans-serif">${fmt(incTotal)}</text>`;
 
-    // Dot on the ring edge (left side, 180°)
-    const dotX = cx - ring.r;
-    const dotY = cy;
-    // Line from dot to label
-    const midX = leftX + 90;
-    labelsSVG += `
-      <line x1="${dotX}" y1="${dotY}" x2="${midX+4}" y2="${ly}" stroke="${ring.color}" stroke-width="0.8" stroke-opacity="0.5" stroke-dasharray="2,2"/>
-      <circle cx="${dotX}" cy="${dotY}" r="3" fill="${ring.color}" opacity="0.8"/>
-      <circle cx="${leftX+14}" cy="${ly}" r="10" fill="${ring.color}" opacity="0.15"/>
-      <text x="${leftX+14}" y="${ly+4}" text-anchor="middle" font-size="10" fill="${ring.color}" font-family="DM Sans,sans-serif">${ring.icon}</text>
-      <text x="${leftX+28}" y="${ly-5}" font-size="9.5" font-weight="700" fill="${ring.color}" font-family="DM Sans,sans-serif">${pctStr}</text>
-      <text x="${leftX+28}" y="${ly+7}" font-size="8" fill="var(--muted,#888)" font-family="DM Sans,sans-serif">${ring.label} · ${valStr}</text>`;
-  });
+  // 5. Left label column — stacked rows, each: icon circle + pct bold + label + value
+  const rowH   = Math.min(44, (H - 20) / N);
+  const startY = cy - ((N - 1) / 2) * rowH;
+  const labels = rings.map((rg, i) => {
+    const ly   = startY + i * rowH;
+    const pctS = (rg.pct * 100).toFixed(1) + '%';
+    const valS = rg.val>=1e5?(rg.val/1e5).toFixed(1)+'L':rg.val>=1e3?(rg.val/1e3).toFixed(0)+'K':'₹'+rg.val.toLocaleString('en-IN');
+    // Connector dot on ring left edge → horizontal line → label
+    const dotX = cx - rg.r;
+    const lineEndX = LABEL_W - 2;
+    return `
+      <circle cx="${dotX}" cy="${cy}" r="2.5" fill="${rg.color}"/>
+      <line x1="${dotX}" y1="${cy}" x2="${lineEndX}" y2="${ly}"
+        stroke="${rg.color}" stroke-width="0.6" stroke-opacity="0.45" stroke-dasharray="2,2"/>
+      <circle cx="10" cy="${ly}" r="9" fill="${rg.color}" fill-opacity="0.12"/>
+      <text x="10" y="${ly+4}" text-anchor="middle" font-size="9"
+        fill="${rg.color}" font-family="DM Sans,sans-serif">${rg.icon}</text>
+      <text x="23" y="${ly-5}" font-size="9" font-weight="700"
+        fill="${rg.color}" font-family="DM Sans,sans-serif">${pctS}</text>
+      <text x="23" y="${ly+6}" font-size="7.5"
+        fill="#888" font-family="DM Sans,sans-serif">${rg.label}</text>
+      <text x="23" y="${ly+15}" font-size="7"
+        fill="#aaa" font-family="DM Sans,sans-serif">${valS}</text>`;
+  }).join('');
 
-  // Right-side ring number labels
-  let numSVG = '';
-  rings.forEach((ring, i) => {
-    const angle = -Math.PI/2 + ring.pct * Math.PI; // end of arc, right side
-    const lx = cx + (ring.r + ringW/2 + 10) * Math.cos(angle);
-    const ly = cy + (ring.r + ringW/2 + 10) * Math.sin(angle);
-    numSVG += `<text x="${lx}" y="${ly+3}" text-anchor="middle" font-size="8" fill="${ring.color}" opacity="0.7" font-family="DM Sans,sans-serif" font-weight="600">0${i+1}</text>`;
-  });
-
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-
-  wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="overflow:visible;display:block;">
-    <defs>
-      <radialGradient id="incGrad" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="#1a6fc4"/>
-        <stop offset="100%" stop-color="#0d7f6e"/>
-      </radialGradient>
-    </defs>
-    ${ringsSVG}
-    ${labelsSVG}
-    ${numSVG}
-  </svg>`;
+  wrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="auto"
+         style="display:block;overflow:hidden;max-width:100%;">
+      <defs>
+        <radialGradient id="incGrad2" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#1a6fc4"/>
+          <stop offset="100%" stop-color="#0d7f6e"/>
+        </radialGradient>
+        <clipPath id="incClip"><rect width="${W}" height="${H}"/></clipPath>
+      </defs>
+      <g clip-path="url(#incClip)">
+        ${tracks}${arcs}${centre}${labels}${nums}
+      </g>
+    </svg>`;
 }
 
 function drawPnlChart() {
@@ -1672,32 +1651,164 @@ function drawBalChart(available) {
 function renderHexGrid(portData, total) {
   const wrap = document.getElementById('hex-grid');
   if (!wrap) return;
-  const ICONS  = ['🏦','💵','🥇','📈','💰','🛡️','🏠','📉','🛒','🔗'];
-  const COLS   = ['#0d7f6e','#1a6fc4','#d4600a','#6332b8','#2c7a3e','#d93025','#0077b6','#b45309','#be185d','#059669'];
-  const assets = ASSET_KEYS.map((k,i)=>({key:k,label:ASSET_LABELS[i],icon:ICONS[i],color:COLS[i],val:portData[k]||0,pct:total>0?(portData[k]||0)/total*100:0}));
-  if (!total){wrap.innerHTML=`<div class="empty" style="padding:24px 0;">No data for ${MONTHS[portMonth]}. Tap Edit.</div>`;return;}
-  const top=assets.slice(0,4),midL=assets[4],midR=assets[5],bot=assets.slice(6,10);
-  function hexCell(a){
-    const hasVal=a.val>0;
-    const valStr=a.val>=1e7?(a.val/1e7).toFixed(2)+'Cr':a.val>=1e5?(a.val/1e5).toFixed(1)+'L':a.val>=1e3?(a.val/1e3).toFixed(1)+'K':a.val.toString();
-    return `<div class="hex-cell"><div class="hex-connector" style="opacity:${hasVal?.8:.2};"></div>
-      <div class="hexagon ${hasVal?'active':'zero'}" style="${hasVal?`background:linear-gradient(145deg,${a.color}cc,${a.color}88);`:''}">
-        <div class="hex-inner"><span class="hex-icon">${a.icon}</span><span style="font-size:7.5px;color:${hasVal?'rgba(255,255,255,.9)':'var(--muted)'};font-weight:600;">${a.pct.toFixed(1)}%</span></div>
-      </div>
-      <div class="hex-connector" style="opacity:${hasVal?.8:.2};"></div>
-      <div class="hex-name">${a.label}</div>
-      <div class="hex-val" style="color:${hasVal?a.color:'var(--muted)'};">${hasVal?'₹'+valStr:'—'}</div>
-    </div>`;
+
+  const ICONS = ['🏦','💵','🥇','📈','💰','🛡️','🏠','📉','🛒','🔗'];
+  const COLS  = ['#00bcd4','#607d8b','#9c27b0','#f44336','#ff9800','#0d7f6e','#1a6fc4','#d4600a','#be185d','#059669'];
+  const assets = ASSET_KEYS.map((k,i) => ({
+    key:k, label:ASSET_LABELS[i], icon:ICONS[i], color:COLS[i],
+    val:portData[k]||0,
+    pct: total>0 ? (portData[k]||0)/total*100 : 0
+  }));
+
+  if (!total) {
+    wrap.innerHTML = `<div class="empty" style="padding:24px 0;">No data for ${MONTHS[portMonth]}. Tap Edit.</div>`;
+    return;
   }
-  const centerHTML=`<div class="hex-cell" style="width:auto;"><div class="hex-connector" style="opacity:.6;"></div>
-    <div class="hex-center-circle"><div class="hex-cval">${total>=1e7?(total/1e7).toFixed(2)+'Cr':total>=1e5?(total/1e5).toFixed(2)+'L':'₹'+total.toLocaleString('en-IN')}</div><div class="hex-clbl">Total Assets</div></div>
-    <div class="hex-connector" style="opacity:.6;"></div></div>`;
-  wrap.innerHTML=`<div class="hex-wrap">
-    <div class="hex-row">${top.map(hexCell).join('')}</div>
-    <div class="hex-row" style="align-items:center;gap:6px;margin:2px 0;">${hexCell(midL)}${centerHTML}${hexCell(midR)}</div>
-    <div class="hex-row">${bot.map(hexCell).join('')}</div></div>
-    <div class="hex-progress-strip">${assets.map(a=>`<div class="hex-progress-dot ${a.val>0?'on':''}" title="${a.label}"></div>`).join('')}</div>
-    <div style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px;">${assets.filter(a=>a.val>0).length} of ${assets.length} assets allocated</div>`;
+
+  const fmtVal = v => v>=1e7?(v/1e7).toFixed(1)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+v;
+  const fmtTot = v => v>=1e7?(v/1e7).toFixed(2)+'Cr':v>=1e5?(v/1e5).toFixed(2)+'L':'₹'+v.toLocaleString('en-IN');
+
+  // Sort by value desc; top 5 get the petal rings, rest go in bottom strip
+  const sorted = [...assets].sort((a,b) => b.val - a.val);
+  const top5   = sorted.slice(0, 5);
+  const rest   = sorted.slice(5);
+
+  // ── SVG geometry ──────────────────────────────────────────────────────────
+  // Pentagon layout: 5 circles arranged around a central point
+  // Each petal: outer ring R=54, inner white circle r=38
+  // Centre of pentagon at (cx,cy); petals placed at radius dist from centre
+
+  const W = 310, H = 290;
+  const cx = W/2, cy = H/2 - 4;
+  const ORBIT  = 88;   // distance from centre to each petal centre
+  const OUTER  = 52;   // petal outer ring radius
+  const INNER  = 37;   // petal inner white circle radius
+  const ARC_W  = OUTER - INNER;  // ring stroke width
+
+  // Pentagon angles: top petal at -90° then every 72°
+  const angles = [0,1,2,3,4].map(i => -Math.PI/2 + i * 2*Math.PI/5);
+  const petalCentres = angles.map(a => ({
+    x: cx + ORBIT * Math.cos(a),
+    y: cy + ORBIT * Math.sin(a)
+  }));
+
+  // Arc sweep helper — arc covers ~75% of circle to leave a gap (like reference)
+  function petalArc(px, py, r, color, pct, rotOffset) {
+    const sweepDeg = 270; // 270° filled arc = gap of 90° at bottom-left
+    const sweep = sweepDeg / 360;
+    const startA = rotOffset;
+    const endA   = startA + sweep * 2 * Math.PI;
+    const x0 = px + r * Math.cos(startA), y0 = py + r * Math.sin(startA);
+    const x1 = px + r * Math.cos(endA),   y1 = py + r * Math.sin(endA);
+    const large = sweep > 0.5 ? 1 : 0;
+    const bg = `<circle cx="${px}" cy="${py}" r="${r}" fill="none"
+      stroke="${color}" stroke-width="${ARC_W}" stroke-opacity="0.1"/>`;
+    const arc = `<path d="M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${large},1 ${x1.toFixed(2)},${y1.toFixed(2)}"
+      fill="none" stroke="${color}" stroke-width="${ARC_W}"
+      stroke-linecap="round" filter="url(#ps)"/>`;
+    // data bar inside ring: a smaller arc showing pct fill
+    const dataR = r - ARC_W/2 - 1;
+    return bg + arc;
+  }
+
+  // Drop shadow filter for petal circles
+  const defs = `<defs>
+    <filter id="ps" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="1" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.18)"/>
+    </filter>
+    <filter id="cs" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1" stdDeviation="4" flood-color="rgba(0,0,0,0.12)"/>
+    </filter>
+  </defs>`;
+
+  // Build 5 petals
+  let petalsSVG = '';
+  top5.forEach((a, i) => {
+    const {x, y} = petalCentres[i];
+    // rotate gap away from centre connection point
+    const gapAngle = Math.atan2(cy - y, cx - x); // direction toward centre
+    const rotOffset = gapAngle + Math.PI * 0.62;   // start arc after gap
+
+    const hasVal = a.val > 0;
+    const col = hasVal ? a.color : '#cccccc';
+
+    petalsSVG += petalArc(x, y, (INNER + OUTER)/2, col, a.pct/100, rotOffset);
+
+    // White inner circle with shadow
+    petalsSVG += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${INNER}"
+      fill="var(--bg1,#fff)" filter="url(#ps)" stroke="var(--bg3)" stroke-width="0.5"/>`;
+
+    // Icon
+    petalsSVG += `<text x="${x.toFixed(1)}" y="${(y-10).toFixed(1)}"
+      text-anchor="middle" font-size="14" font-family="DM Sans,sans-serif">${a.icon}</text>`;
+
+    // Label
+    petalsSVG += `<text x="${x.toFixed(1)}" y="${(y+4).toFixed(1)}"
+      text-anchor="middle" font-size="7" font-weight="600" fill="${col}"
+      font-family="DM Sans,sans-serif">${a.label}</text>`;
+
+    // Value
+    const valStr = hasVal ? fmtVal(a.val) : '—';
+    petalsSVG += `<text x="${x.toFixed(1)}" y="${(y+15).toFixed(1)}"
+      text-anchor="middle" font-size="7.5" font-weight="700" fill="var(--text,#222)"
+      font-family="DM Sans,sans-serif">${hasVal?'₹':''}${hasVal?fmtVal(a.val):'—'}</text>`;
+
+    // Pct badge
+    if (hasVal) {
+      petalsSVG += `<text x="${x.toFixed(1)}" y="${(y+26).toFixed(1)}"
+        text-anchor="middle" font-size="6.5" fill="${col}" font-family="DM Sans,sans-serif"
+        opacity="0.85">${a.pct.toFixed(1)}%</text>`;
+    }
+  });
+
+  // Centre dashed circle + dot connectors (like reference)
+  const CDASH_R = 32;
+  const centreSVG = `
+    <circle cx="${cx}" cy="${cy}" r="${CDASH_R}"
+      fill="none" stroke="var(--muted,#aaa)" stroke-width="1"
+      stroke-dasharray="3,3" opacity="0.5"/>`;
+
+  // Dots where petals meet the dashed circle
+  const dotsSVG = top5.map((a,i) => {
+    const ang = angles[i];
+    const dx = cx + CDASH_R * Math.cos(ang);
+    const dy = cy + CDASH_R * Math.sin(ang);
+    return `<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="4"
+      fill="var(--bg1,#fff)" stroke="${a.val>0?a.color:'#ccc'}" stroke-width="1.5"/>
+    <circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="2"
+      fill="${a.val>0?a.color:'#ccc'}"/>`;
+  }).join('');
+
+  // Centre total text (no circle — just text in the middle of dashes)
+  const totalSVG = `
+    <text x="${cx}" y="${cy-7}" text-anchor="middle" font-size="6.5"
+      fill="var(--muted,#888)" font-family="DM Sans,sans-serif" letter-spacing="0.5">TOTAL</text>
+    <text x="${cx}" y="${cy+5}" text-anchor="middle" font-size="9.5" font-weight="700"
+      fill="var(--text,#222)" font-family="DM Sans,sans-serif">${fmtTot(total)}</text>`;
+
+  // ── Bottom strip for remaining 5 assets ──────────────────────────────────
+  const restHTML = rest.map(a => {
+    const hasVal = a.val > 0;
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:0;">
+      <div style="width:32px;height:32px;border-radius:50%;border:2.5px solid ${hasVal?a.color:'var(--bg3)'};
+           background:var(--bg2);display:flex;align-items:center;justify-content:center;
+           font-size:14px;box-shadow:0 1px 4px rgba(0,0,0,.1);">${a.icon}</div>
+      <div style="font-size:8px;color:var(--muted);text-align:center;line-height:1.2;max-width:48px;">${a.label}</div>
+      <div style="font-size:8px;font-weight:700;color:${hasVal?a.color:'var(--muted)'};">${hasVal?'₹'+fmtVal(a.val):'—'}</div>
+      ${hasVal?`<div style="font-size:7px;color:var(--muted);">${a.pct.toFixed(1)}%</div>`:''}
+    </div>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="auto" style="display:block;overflow:visible;">
+      ${defs}
+      ${petalsSVG}
+      ${centreSVG}
+      ${dotsSVG}
+      ${totalSVG}
+    </svg>
+    ${rest.length ? `<div style="display:flex;justify-content:space-around;align-items:flex-start;
+        padding:8px 4px 4px;border-top:1px solid var(--bg3);margin-top:4px;gap:4px;">${restHTML}</div>` : ''}`;
 }
 
 function setPortMonth(m) { portMonth = m; renderPortfolio(); }
