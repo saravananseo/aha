@@ -1622,28 +1622,36 @@ function renderHexGrid(portData, total) {
       filter="url(#wshadow)"/>`;
   });
 
-  // Name + value text inside each segment (rotated along segment midpoint angle)
+  // Name at top, value at bottom of each segment — both rotated along radius
   let icons = '';
   assets.forEach((a,i) => {
     const aMid = -Math.PI/2 + (i+0.5)*SEG;
-    const ix = CX + R_MID * Math.cos(aMid);
-    const iy = CY + R_MID * Math.sin(aMid);
     const hasVal = a.val > 0;
-    // Rotate text to align with segment direction
+    // Rotate so text stands upright along the radius direction
     const rotateDeg = (aMid * 180 / Math.PI) + 90;
-    // Flip text on left half so it reads upward not upside-down
     const flip = (aMid > Math.PI/2 || aMid < -Math.PI/2) ? 180 : 0;
     const finalRot = rotateDeg + flip;
-    const shortLabel = a.label.length > 7 ? a.label.slice(0,7) : a.label;
+
+    // Name near outer edge, value near inner edge
+    const rName = R_OUT - 14;   // close to outer ring
+    const rVal  = R_IN  + 14;   // close to inner ring
+    const nx = CX + rName * Math.cos(aMid), ny = CY + rName * Math.sin(aMid);
+    const vx = CX + rVal  * Math.cos(aMid), vy = CY + rVal  * Math.sin(aMid);
+
+    const shortLabel = a.label.length > 7 ? a.label.slice(0,6)+'…' : a.label;
     const valStr = hasVal ? '₹'+fmtV(a.val) : '—';
-    icons += `<g transform="rotate(${finalRot.toFixed(1)},${ix.toFixed(1)},${iy.toFixed(1)})" opacity="${hasVal?1:0.45}">
-      <text x="${ix.toFixed(1)}" y="${(iy-5).toFixed(1)}"
-        text-anchor="middle" font-size="7.5" font-weight="700"
-        fill="#fff" font-family="DM Sans,sans-serif">${shortLabel}</text>
-      <text x="${ix.toFixed(1)}" y="${(iy+6).toFixed(1)}"
-        text-anchor="middle" font-size="7" fill="rgba(255,255,255,0.9)"
-        font-family="DM Sans,sans-serif">${valStr}</text>
-    </g>`;
+
+    icons += `
+      <text transform="rotate(${finalRot.toFixed(1)},${nx.toFixed(1)},${ny.toFixed(1)})"
+        x="${nx.toFixed(1)}" y="${ny.toFixed(1)}"
+        text-anchor="middle" dominant-baseline="middle"
+        font-size="7.5" font-weight="700" fill="#fff"
+        opacity="${hasVal?1:0.45}" font-family="DM Sans,sans-serif">${shortLabel}</text>
+      <text transform="rotate(${finalRot.toFixed(1)},${vx.toFixed(1)},${vy.toFixed(1)})"
+        x="${vx.toFixed(1)}" y="${vy.toFixed(1)}"
+        text-anchor="middle" dominant-baseline="middle"
+        font-size="7" fill="rgba(255,255,255,0.88)"
+        opacity="${hasVal?1:0.45}" font-family="DM Sans,sans-serif">${valStr}</text>`;
   });
 
   // Centre white circle
@@ -1674,29 +1682,14 @@ function renderHexGrid(portData, total) {
   
   });
 
-  // ── External legend rows — right side then left side ─────────────
-  // Place a clean legend below the wheel
-  const legendItems = assets.map((a,i) => {
-    const hasVal = a.val > 0;
-    return `<div style="display:flex;align-items:center;gap:5px;min-width:0;">
-      <div style="width:8px;height:8px;border-radius:2px;flex-shrink:0;
-        background:${hasVal?a.color:'var(--bg3)'};opacity:${hasVal?1:0.4};"></div>
-      <span style="font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;
-        text-overflow:ellipsis;">${a.label}</span>
-      <span style="font-size:9px;font-weight:700;color:${hasVal?a.color:'var(--muted)'};
-        margin-left:auto;white-space:nowrap;">${hasVal?'₹'+fmtV(a.val):'—'}</span>
-    </div>`;
-  }).join('');
+
 
   wrap.innerHTML = `
     <svg viewBox="0 0 ${VW} ${VH - 80}" width="100%" height="auto"
       style="display:block;overflow:visible;max-width:340px;margin:0 auto;">
       ${defs}${segs}${icons}${centre}${labelsHTML}
     </svg>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;
-      padding:8px 6px 0;border-top:1px solid var(--bg3);margin-top:4px;">
-      ${legendItems}
-    </div>`;
+`;
 }
 
 function setPortMonth(m) { portMonth = m; renderPortfolio(); }
