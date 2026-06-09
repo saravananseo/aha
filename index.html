@@ -1555,12 +1555,12 @@ function renderHexGrid(portData, total) {
 
   // ── Geometry ──────────────────────────────────────────────────────
   const N    = 10;
-  const VW   = 300, VH = 300;
+  const VW   = 340, VH = 340;
   const CX   = VW/2, CY = VH/2;
-  const R_OUT = 138;   // outer radius of ring
-  const R_IN  = 58;    // inner radius — smaller white circle, more room for text
+  const R_OUT = 162;   // bigger outer radius
+  const R_IN  = 52;    // smaller inner circle = wider ring = more room for text
   const R_MID = (R_OUT + R_IN) / 2;
-  const GAP   = 0.030; // gap between segments in radians
+  const GAP   = 0.028;
 
   // Each segment = 36° (2π/10), starting from top (-90°)
   const SEG   = 2 * Math.PI / N;
@@ -1639,8 +1639,8 @@ function renderHexGrid(portData, total) {
     const isBottom = aMidNorm > Math.PI; // segments in bottom half need path reversal
 
     const OFFSET  = SEG * 0.20;          // angular gap between name & value lines
-    const R_START = R_IN  + 14;          // inset from inner edge
-    const R_END   = R_OUT - 14;          // inset from outer edge
+    const R_START = R_IN  + 16;          // inset from inner edge
+    const R_END   = R_OUT - 16;          // inset from outer edge
 
     const aName = aMid - OFFSET;
     const aVal  = aMid + OFFSET;
@@ -1663,15 +1663,15 @@ function renderHexGrid(portData, total) {
     // dy pushes text perpendicular to path (into the segment body away from the edge).
     // Top half:    +dy pushes toward clockwise/right = into segment centre ✓
     // Bottom half: path is reversed, so +dy pushes opposite → use negative dy
-    const nameDy = isBottom ? '-3' : '6';
-    const valDy  = isBottom ? '5'  : '-1';
+    const nameDy = isBottom ? '-4' : '8';
+    const valDy  = isBottom ? '7'  : '-2';
 
     icons += `
-      <text font-size="8" font-weight="700" fill="#fff" opacity="${opacity}"
+      <text font-size="11" font-weight="700" fill="#fff" opacity="${opacity}"
         font-family="DM Sans,sans-serif" dy="${nameDy}">
         <textPath href="#lp${i}" startOffset="5%">${shortLabel}</textPath>
       </text>
-      <text font-size="9" font-weight="600" fill="rgba(255,255,255,0.95)" opacity="${opacity}"
+      <text font-size="10.5" font-weight="600" fill="rgba(255,255,255,0.95)" opacity="${opacity}"
         font-family="DM Sans,sans-serif" dy="${valDy}">
         <textPath href="#rp${i}" startOffset="5%">${valStr}</textPath>
       </text>`;
@@ -1711,7 +1711,7 @@ function renderHexGrid(portData, total) {
 
   wrap.innerHTML = `
     <svg viewBox="0 0 ${VW} ${VH}" width="100%" height="auto"
-      style="display:block;overflow:hidden;max-width:300px;margin:0 auto;">
+      style="display:block;overflow:hidden;max-width:360px;margin:0 auto;">
       ${defs}${pathDefsBlock}${segs}${icons}${centre}${labelsHTML}
     </svg>
 `;
