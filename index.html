@@ -1629,58 +1629,54 @@ function renderHexGrid(portData, total) {
 
   assets.forEach((a,i) => {
     const hasVal = a.val > 0;
-    const opacity = hasVal ? 1 : 0.45;
+    const opacity = hasVal ? 1 : 0.4;
 
-    const aLeft  = -Math.PI/2 + i*SEG + GAP;
-    const aRight = -Math.PI/2 + (i+1)*SEG - GAP;
-
-    // Radial path: from inner edge → outer edge along each spoke
-    // Left spoke
-    const lx0 = CX + (R_IN  + 4)*Math.cos(aLeft),  ly0 = CY + (R_IN  + 4)*Math.sin(aLeft);
-    const lx1 = CX + (R_OUT - 4)*Math.cos(aLeft),  ly1 = CY + (R_OUT - 4)*Math.sin(aLeft);
-    // Right spoke
-    const rx0 = CX + (R_IN  + 4)*Math.cos(aRight), ry0 = CY + (R_IN  + 4)*Math.sin(aRight);
-    const rx1 = CX + (R_OUT - 4)*Math.cos(aRight), ry1 = CY + (R_OUT - 4)*Math.sin(aRight);
-
-    const leftId  = `lp${i}`;
-    const rightId = `rp${i}`;
-
-    // Determine if this spoke goes "downward" visually (i.e. text would read bottom-up)
-    // A spoke going rightward-and-up or leftward-and-up = fine. Going down = flip path direction.
-    // Flip when the outer point is below the inner point AND we're on the right half,
-    // or outer is above on left half — simplest: flip when aMid is in bottom semicircle
-    const aMid = -Math.PI/2 + (i+0.5)*SEG;
+    // Use the MIDLINE of the segment for both texts — one path per text.
+    // Name runs along the midline offset slightly CCW, value offset slightly CW.
+    // Both use the same flip logic and same dy so behaviour is 100% consistent.
+    const aMid   = -Math.PI/2 + (i + 0.5) * SEG;
     const aMidNorm = ((aMid % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
-    const bottomHalf = aMidNorm > Math.PI;
+    const isBottom = aMidNorm > Math.PI; // segments in bottom half need path reversal
 
-    // For bottom-half segments, reverse the path direction so text still reads inner→outer
-    // (SVG textPath always renders left-to-right along path direction)
-    const leftPath  = bottomHalf
-      ? `M${lx1.toFixed(2)},${ly1.toFixed(2)} L${lx0.toFixed(2)},${ly0.toFixed(2)}`
-      : `M${lx0.toFixed(2)},${ly0.toFixed(2)} L${lx1.toFixed(2)},${ly1.toFixed(2)}`;
-    const rightPath = bottomHalf
-      ? `M${rx1.toFixed(2)},${ry1.toFixed(2)} L${rx0.toFixed(2)},${ry0.toFixed(2)}`
-      : `M${rx0.toFixed(2)},${ry0.toFixed(2)} L${rx1.toFixed(2)},${ry1.toFixed(2)}`;
+    const OFFSET  = SEG * 0.20;          // angular gap between name & value lines
+    const R_START = R_IN  + 14;          // inset from inner edge
+    const R_END   = R_OUT - 14;          // inset from outer edge
 
-    pathDefs += `<path id="${leftId}"  d="${leftPath}"  fill="none"/>`;
-    pathDefs += `<path id="${rightId}" d="${rightPath}" fill="none"/>`;
+    const aName = aMid - OFFSET;
+    const aVal  = aMid + OFFSET;
+
+    function radialPath(angle) {
+      const x0=(CX+R_START*Math.cos(angle)).toFixed(2), y0=(CY+R_START*Math.sin(angle)).toFixed(2);
+      const x1=(CX+R_END  *Math.cos(angle)).toFixed(2), y1=(CY+R_END  *Math.sin(angle)).toFixed(2);
+      // Bottom half: path goes downward visually → reverse so text reads inner→outer
+      return isBottom
+        ? `M${x1},${y1} L${x0},${y0}`
+        : `M${x0},${y0} L${x1},${y1}`;
+    }
+
+    pathDefs += `<path id="lp${i}" d="${radialPath(aName)}" fill="none"/>`;
+    pathDefs += `<path id="rp${i}" d="${radialPath(aVal)}"  fill="none"/>`;
 
     const shortLabel = a.label.length > 9 ? a.label.slice(0,8)+'…' : a.label;
     const valStr = hasVal ? '₹'+fmtV(a.val) : '—';
 
-    // Offset text slightly away from the edge into the segment body
+    // dy pushes text perpendicular to path (into the segment body away from the edge).
+    // Top half:    +dy pushes toward clockwise/right = into segment centre ✓
+    // Bottom half: path is reversed, so +dy pushes opposite → use negative dy
+    const nameDy = isBottom ? '-3' : '6';
+    const valDy  = isBottom ? '5'  : '-1';
+
     icons += `
-      <text font-size="7.5" font-weight="700" fill="#fff" opacity="${opacity}"
-        font-family="DM Sans,sans-serif" dy="4">
-        <textPath href="#${leftId}" startOffset="8%">${shortLabel}</textPath>
+      <text font-size="8" font-weight="700" fill="#fff" opacity="${opacity}"
+        font-family="DM Sans,sans-serif" dy="${nameDy}">
+        <textPath href="#lp${i}" startOffset="5%">${shortLabel}</textPath>
       </text>
-      <text font-size="7" font-weight="500" fill="rgba(255,255,255,0.92)" opacity="${opacity}"
-        font-family="DM Sans,sans-serif" dy="-2">
-        <textPath href="#${rightId}" startOffset="8%">${valStr}</textPath>
+      <text font-size="9" font-weight="600" fill="rgba(255,255,255,0.95)" opacity="${opacity}"
+        font-family="DM Sans,sans-serif" dy="${valDy}">
+        <textPath href="#rp${i}" startOffset="5%">${valStr}</textPath>
       </text>`;
   });
 
-  // Inject path defs into the existing defs block via string concat (appended before closing)
   const pathDefsBlock = `<g visibility="hidden">${pathDefs}</g>`;
 
   // Centre white circle
