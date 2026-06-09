@@ -1622,41 +1622,53 @@ function renderHexGrid(portData, total) {
       filter="url(#wshadow)"/>`;
   });
 
-  // Text runs from inner edge → outer edge (bottom to top along radius)
-  // Two lines: value line closer to inner, name line closer to outer
+  // Name runs along LEFT edge of segment (inner→outer), value along RIGHT edge
+  // Text is rotated to lie along the radial spoke of each segment edge
   let icons = '';
   assets.forEach((a,i) => {
-    const aMid = -Math.PI/2 + (i+0.5)*SEG;
     const hasVal = a.val > 0;
+    const opacity = hasVal ? 1 : 0.45;
 
-    // Flip so text always reads outward, never upside-down
-    const aMidNorm = ((aMid % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
-    const rotateDeg = (aMid * 180 / Math.PI) + 90;
-    const flip = (aMidNorm > Math.PI) ? 180 : 0;
-    const finalRot = rotateDeg + flip;
+    // Left edge angle (start of segment) and right edge angle (end of segment)
+    const aLeft  = -Math.PI/2 + i*SEG + GAP;         // left spoke
+    const aRight = -Math.PI/2 + (i+1)*SEG - GAP;     // right spoke
 
-    // Segment radial span = R_OUT - R_IN = 80px; split into 3 zones
-    const rVal  = R_IN  + 20;   // value: near inner edge
-    const rMid  = R_IN  + 42;   // label: mid-segment
-    const rName = R_OUT - 16;   // name: near outer edge
-    const nx = CX + rName*Math.cos(aMid), ny = CY + rName*Math.sin(aMid);
-    const mx = CX + rMid *Math.cos(aMid), my = CY + rMid *Math.sin(aMid);
-    const vx = CX + rVal *Math.cos(aMid), vy = CY + rVal *Math.sin(aMid);
+    // Text anchor points: midpoint along the spoke between R_IN and R_OUT
+    // We place text path along the spoke — simulate by centering at mid-radius
+    const rTextMid = (R_IN + R_OUT) / 2;
 
-    const shortLabel = a.label.length > 8 ? a.label.slice(0,7)+'…' : a.label;
+    const lx = CX + rTextMid * Math.cos(aLeft),  ly = CY + rTextMid * Math.sin(aLeft);
+    const rx = CX + rTextMid * Math.cos(aRight), ry = CY + rTextMid * Math.sin(aRight);
+
+    // Rotation: text lies along the spoke direction
+    // Spoke direction angle in degrees
+    const leftDeg  = aLeft  * 180 / Math.PI;
+    const rightDeg = aRight * 180 / Math.PI;
+
+    // Normalise for flip: if spoke points into lower half, flip 180° so text reads outward
+    const leftNorm  = ((aLeft  % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+    const rightNorm = ((aRight % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+
+    // Text reads from inner→outer = from centre outward
+    // Rotation = spoke angle + 90° (text baseline along spoke, reading outward)
+    // No flip needed: we always set rotation so top of text faces outward
+    const leftRot  = leftDeg  + 90 + (leftNorm  > Math.PI ? 180 : 0);
+    const rightRot = rightDeg + 90 + (rightNorm > Math.PI ? 180 : 0);
+
+    const shortLabel = a.label.length > 9 ? a.label.slice(0,8)+'…' : a.label;
     const valStr = hasVal ? '₹'+fmtV(a.val) : '—';
 
     icons += `
-      <text transform="rotate(${finalRot.toFixed(1)},${nx.toFixed(1)},${ny.toFixed(1)})"
-        x="${nx.toFixed(1)}" y="${ny.toFixed(1)}"
+      <text transform="rotate(${leftRot.toFixed(1)},${lx.toFixed(1)},${ly.toFixed(1)})"
+        x="${lx.toFixed(1)}" y="${ly.toFixed(1)}"
         text-anchor="middle" dominant-baseline="middle"
-        font-size="8" font-weight="700" fill="#fff" letter-spacing="0.2"
-        opacity="${hasVal?1:0.5}" font-family="DM Sans,sans-serif">${shortLabel}</text>
-      <text transform="rotate(${finalRot.toFixed(1)},${vx.toFixed(1)},${vy.toFixed(1)})"
-        x="${vx.toFixed(1)}" y="${vy.toFixed(1)}"
+        font-size="7.5" font-weight="700" fill="#fff"
+        opacity="${opacity}" font-family="DM Sans,sans-serif">${shortLabel}</text>
+      <text transform="rotate(${rightRot.toFixed(1)},${rx.toFixed(1)},${ry.toFixed(1)})"
+        x="${rx.toFixed(1)}" y="${ry.toFixed(1)}"
         text-anchor="middle" dominant-baseline="middle"
-        font-size="7.5" font-weight="600" fill="rgba(255,255,255,0.92)"
-        opacity="${hasVal?1:0.5}" font-family="DM Sans,sans-serif">${valStr}</text>`;
+        font-size="7" font-weight="500" fill="rgba(255,255,255,0.9)"
+        opacity="${opacity}" font-family="DM Sans,sans-serif">${valStr}</text>`;
   });
 
   // Centre white circle
