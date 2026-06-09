@@ -1622,54 +1622,66 @@ function renderHexGrid(portData, total) {
       filter="url(#wshadow)"/>`;
   });
 
-  // Name runs along LEFT edge of segment (inner→outer), value along RIGHT edge
-  // Text is rotated to lie along the radial spoke of each segment edge
-  let icons = '';
+  // Name flows along LEFT spoke (inner→outer), value along RIGHT spoke (inner→outer)
+  // Uses SVG textPath on a radial line path so text genuinely follows the edge
+  let pathDefs = '';
+  let icons    = '';
+
   assets.forEach((a,i) => {
     const hasVal = a.val > 0;
     const opacity = hasVal ? 1 : 0.45;
 
-    // Left edge angle (start of segment) and right edge angle (end of segment)
-    const aLeft  = -Math.PI/2 + i*SEG + GAP;         // left spoke
-    const aRight = -Math.PI/2 + (i+1)*SEG - GAP;     // right spoke
+    const aLeft  = -Math.PI/2 + i*SEG + GAP;
+    const aRight = -Math.PI/2 + (i+1)*SEG - GAP;
 
-    // Text anchor points: midpoint along the spoke between R_IN and R_OUT
-    // We place text path along the spoke — simulate by centering at mid-radius
-    const rTextMid = (R_IN + R_OUT) / 2;
+    // Radial path: from inner edge → outer edge along each spoke
+    // Left spoke
+    const lx0 = CX + (R_IN  + 4)*Math.cos(aLeft),  ly0 = CY + (R_IN  + 4)*Math.sin(aLeft);
+    const lx1 = CX + (R_OUT - 4)*Math.cos(aLeft),  ly1 = CY + (R_OUT - 4)*Math.sin(aLeft);
+    // Right spoke
+    const rx0 = CX + (R_IN  + 4)*Math.cos(aRight), ry0 = CY + (R_IN  + 4)*Math.sin(aRight);
+    const rx1 = CX + (R_OUT - 4)*Math.cos(aRight), ry1 = CY + (R_OUT - 4)*Math.sin(aRight);
 
-    const lx = CX + rTextMid * Math.cos(aLeft),  ly = CY + rTextMid * Math.sin(aLeft);
-    const rx = CX + rTextMid * Math.cos(aRight), ry = CY + rTextMid * Math.sin(aRight);
+    const leftId  = `lp${i}`;
+    const rightId = `rp${i}`;
 
-    // Rotation: text lies along the spoke direction
-    // Spoke direction angle in degrees
-    const leftDeg  = aLeft  * 180 / Math.PI;
-    const rightDeg = aRight * 180 / Math.PI;
+    // Determine if this spoke goes "downward" visually (i.e. text would read bottom-up)
+    // A spoke going rightward-and-up or leftward-and-up = fine. Going down = flip path direction.
+    // Flip when the outer point is below the inner point AND we're on the right half,
+    // or outer is above on left half — simplest: flip when aMid is in bottom semicircle
+    const aMid = -Math.PI/2 + (i+0.5)*SEG;
+    const aMidNorm = ((aMid % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+    const bottomHalf = aMidNorm > Math.PI;
 
-    // Normalise for flip: if spoke points into lower half, flip 180° so text reads outward
-    const leftNorm  = ((aLeft  % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
-    const rightNorm = ((aRight % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+    // For bottom-half segments, reverse the path direction so text still reads inner→outer
+    // (SVG textPath always renders left-to-right along path direction)
+    const leftPath  = bottomHalf
+      ? `M${lx1.toFixed(2)},${ly1.toFixed(2)} L${lx0.toFixed(2)},${ly0.toFixed(2)}`
+      : `M${lx0.toFixed(2)},${ly0.toFixed(2)} L${lx1.toFixed(2)},${ly1.toFixed(2)}`;
+    const rightPath = bottomHalf
+      ? `M${rx1.toFixed(2)},${ry1.toFixed(2)} L${rx0.toFixed(2)},${ry0.toFixed(2)}`
+      : `M${rx0.toFixed(2)},${ry0.toFixed(2)} L${rx1.toFixed(2)},${ry1.toFixed(2)}`;
 
-    // Text reads from inner→outer = from centre outward
-    // Rotation = spoke angle + 90° (text baseline along spoke, reading outward)
-    // No flip needed: we always set rotation so top of text faces outward
-    const leftRot  = leftDeg  + 90 + (leftNorm  > Math.PI ? 180 : 0);
-    const rightRot = rightDeg + 90 + (rightNorm > Math.PI ? 180 : 0);
+    pathDefs += `<path id="${leftId}"  d="${leftPath}"  fill="none"/>`;
+    pathDefs += `<path id="${rightId}" d="${rightPath}" fill="none"/>`;
 
     const shortLabel = a.label.length > 9 ? a.label.slice(0,8)+'…' : a.label;
     const valStr = hasVal ? '₹'+fmtV(a.val) : '—';
 
+    // Offset text slightly away from the edge into the segment body
     icons += `
-      <text transform="rotate(${leftRot.toFixed(1)},${lx.toFixed(1)},${ly.toFixed(1)})"
-        x="${lx.toFixed(1)}" y="${ly.toFixed(1)}"
-        text-anchor="middle" dominant-baseline="middle"
-        font-size="7.5" font-weight="700" fill="#fff"
-        opacity="${opacity}" font-family="DM Sans,sans-serif">${shortLabel}</text>
-      <text transform="rotate(${rightRot.toFixed(1)},${rx.toFixed(1)},${ry.toFixed(1)})"
-        x="${rx.toFixed(1)}" y="${ry.toFixed(1)}"
-        text-anchor="middle" dominant-baseline="middle"
-        font-size="7" font-weight="500" fill="rgba(255,255,255,0.9)"
-        opacity="${opacity}" font-family="DM Sans,sans-serif">${valStr}</text>`;
+      <text font-size="7.5" font-weight="700" fill="#fff" opacity="${opacity}"
+        font-family="DM Sans,sans-serif" dy="4">
+        <textPath href="#${leftId}" startOffset="8%">${shortLabel}</textPath>
+      </text>
+      <text font-size="7" font-weight="500" fill="rgba(255,255,255,0.92)" opacity="${opacity}"
+        font-family="DM Sans,sans-serif" dy="-2">
+        <textPath href="#${rightId}" startOffset="8%">${valStr}</textPath>
+      </text>`;
   });
+
+  // Inject path defs into the existing defs block via string concat (appended before closing)
+  const pathDefsBlock = `<g visibility="hidden">${pathDefs}</g>`;
 
   // Centre white circle
   const centre = `
@@ -1704,7 +1716,7 @@ function renderHexGrid(portData, total) {
   wrap.innerHTML = `
     <svg viewBox="0 0 ${VW} ${VH}" width="100%" height="auto"
       style="display:block;overflow:hidden;max-width:300px;margin:0 auto;">
-      ${defs}${segs}${icons}${centre}${labelsHTML}
+      ${defs}${pathDefsBlock}${segs}${icons}${centre}${labelsHTML}
     </svg>
 `;
 }
