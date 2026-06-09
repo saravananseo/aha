@@ -1557,10 +1557,10 @@ function renderHexGrid(portData, total) {
   const N    = 10;
   const VW   = 300, VH = 300;
   const CX   = VW/2, CY = VH/2;
-  const R_OUT = 128;   // outer radius of ring
-  const R_IN  = 72;    // inner radius of ring (donut hole)
-  const R_MID = (R_OUT + R_IN) / 2;  // mid radius for icon placement
-  const GAP   = 0.032; // gap between segments in radians
+  const R_OUT = 138;   // outer radius of ring
+  const R_IN  = 58;    // inner radius — smaller white circle, more room for text
+  const R_MID = (R_OUT + R_IN) / 2;
+  const GAP   = 0.030; // gap between segments in radians
 
   // Each segment = 36° (2π/10), starting from top (-90°)
   const SEG   = 2 * Math.PI / N;
@@ -1622,53 +1622,55 @@ function renderHexGrid(portData, total) {
       filter="url(#wshadow)"/>`;
   });
 
-  // Name at top, value at bottom of each segment — both rotated along radius
+  // Text runs from inner edge → outer edge (bottom to top along radius)
+  // Two lines: value line closer to inner, name line closer to outer
   let icons = '';
   assets.forEach((a,i) => {
     const aMid = -Math.PI/2 + (i+0.5)*SEG;
     const hasVal = a.val > 0;
-    // Rotate so text stands upright along the radius direction
-    // Normalise aMid to [0, 2π) for consistent flip detection
+
+    // Flip so text always reads outward, never upside-down
     const aMidNorm = ((aMid % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
     const rotateDeg = (aMid * 180 / Math.PI) + 90;
-    // Flip segments on the bottom half (180°–360°) so text never appears upside-down
     const flip = (aMidNorm > Math.PI) ? 180 : 0;
     const finalRot = rotateDeg + flip;
 
-    // Name near outer edge, value near inner edge
-    const rName = R_OUT - 16;   // close to outer ring
-    const rVal  = R_IN  + 16;   // close to inner ring
-    const nx = CX + rName * Math.cos(aMid), ny = CY + rName * Math.sin(aMid);
-    const vx = CX + rVal  * Math.cos(aMid), vy = CY + rVal  * Math.sin(aMid);
+    // Segment radial span = R_OUT - R_IN = 80px; split into 3 zones
+    const rVal  = R_IN  + 20;   // value: near inner edge
+    const rMid  = R_IN  + 42;   // label: mid-segment
+    const rName = R_OUT - 16;   // name: near outer edge
+    const nx = CX + rName*Math.cos(aMid), ny = CY + rName*Math.sin(aMid);
+    const mx = CX + rMid *Math.cos(aMid), my = CY + rMid *Math.sin(aMid);
+    const vx = CX + rVal *Math.cos(aMid), vy = CY + rVal *Math.sin(aMid);
 
-    const shortLabel = a.label.length > 7 ? a.label.slice(0,6)+'…' : a.label;
+    const shortLabel = a.label.length > 8 ? a.label.slice(0,7)+'…' : a.label;
     const valStr = hasVal ? '₹'+fmtV(a.val) : '—';
 
     icons += `
       <text transform="rotate(${finalRot.toFixed(1)},${nx.toFixed(1)},${ny.toFixed(1)})"
         x="${nx.toFixed(1)}" y="${ny.toFixed(1)}"
         text-anchor="middle" dominant-baseline="middle"
-        font-size="7" font-weight="700" fill="#fff"
-        opacity="${hasVal?1:0.45}" font-family="DM Sans,sans-serif">${shortLabel}</text>
+        font-size="8" font-weight="700" fill="#fff" letter-spacing="0.2"
+        opacity="${hasVal?1:0.5}" font-family="DM Sans,sans-serif">${shortLabel}</text>
       <text transform="rotate(${finalRot.toFixed(1)},${vx.toFixed(1)},${vy.toFixed(1)})"
         x="${vx.toFixed(1)}" y="${vy.toFixed(1)}"
         text-anchor="middle" dominant-baseline="middle"
-        font-size="6.5" fill="rgba(255,255,255,0.88)"
-        opacity="${hasVal?1:0.45}" font-family="DM Sans,sans-serif">${valStr}</text>`;
+        font-size="7.5" font-weight="600" fill="rgba(255,255,255,0.92)"
+        opacity="${hasVal?1:0.5}" font-family="DM Sans,sans-serif">${valStr}</text>`;
   });
 
   // Centre white circle
   const centre = `
-    <circle cx="${CX}" cy="${CY}" r="${R_IN - 4}"
+    <circle cx="${CX}" cy="${CY}" r="${R_IN - 3}"
       fill="var(--bg1,#ffffff)" filter="url(#cshadow)"/>
-    <text x="${CX}" y="${CY - 18}" text-anchor="middle"
-      font-size="7" fill="var(--muted,#aaa)" letter-spacing="1"
-      font-family="DM Sans,sans-serif">TOTAL ASSETS</text>
+    <text x="${CX}" y="${CY - 12}" text-anchor="middle"
+      font-size="6" fill="var(--muted,#aaa)" letter-spacing="1"
+      font-family="DM Sans,sans-serif">TOTAL</text>
     <text x="${CX}" y="${CY + 2}" text-anchor="middle"
-      font-size="13" font-weight="700" fill="var(--text,#1a1a1a)"
+      font-size="11.5" font-weight="700" fill="var(--text,#1a1a1a)"
       font-family="DM Sans,sans-serif">${fmtT(total)}</text>
-    <text x="${CX}" y="${CY + 18}" text-anchor="middle"
-      font-size="7" fill="var(--muted,#aaa)"
+    <text x="${CX}" y="${CY + 14}" text-anchor="middle"
+      font-size="6" fill="var(--muted,#aaa)"
       font-family="DM Sans,sans-serif">${assets.filter(a=>a.val>0).length} assets</text>`;
 
   // Outside labels — number badge + asset name + value
