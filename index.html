@@ -1601,12 +1601,15 @@ function renderHexGrid(portData, total) {
       <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000" flood-opacity="0.12"/>
     </filter>
     ${assets.map((a,i) => {
-      const a0 = -Math.PI/2 + i*SEG;
-      const a1 = -Math.PI/2 + (i+1)*SEG;
-      return `<linearGradient id="g${i}" x1="${Math.cos(a0).toFixed(3)}" y1="${Math.sin(a0).toFixed(3)}"
-        x2="${Math.cos(a1).toFixed(3)}" y2="${Math.sin(a1).toFixed(3)}" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stop-color="${a.color}" stop-opacity="0.82"/>
-        <stop offset="100%" stop-color="${a.color}"/>
+      const aMid = -Math.PI/2 + (i+0.5)*SEG;
+      // Radial gradient: inner = near white, outer = solid colour at 35% opacity (light tint)
+      const ix = (CX + R_IN  * Math.cos(aMid)).toFixed(1);
+      const iy = (CY + R_IN  * Math.sin(aMid)).toFixed(1);
+      const ox = (CX + R_OUT * Math.cos(aMid)).toFixed(1);
+      const oy = (CY + R_OUT * Math.sin(aMid)).toFixed(1);
+      return `<linearGradient id="g${i}" x1="${ix}" y1="${iy}" x2="${ox}" y2="${oy}" gradientUnits="userSpaceOnUse">
+        <stop offset="0%"   stop-color="${a.color}" stop-opacity="0.08"/>
+        <stop offset="100%" stop-color="${a.color}" stop-opacity="0.55"/>
       </linearGradient>`;
     }).join('')}
   </defs>`;
@@ -1618,7 +1621,8 @@ function renderHexGrid(portData, total) {
     const hasVal = a.val > 0;
     const rOut = hasVal ? R_OUT : R_OUT - 8;
     segs += `<path d="${wedge(i, rOut, R_IN)}"
-      fill="url(#g${i})" opacity="${hasVal ? 1 : 0.25}"
+      fill="url(#g${i})" opacity="${hasVal ? 1 : 0.12}"
+      stroke="rgba(255,255,255,0.7)" stroke-width="1.5"
       filter="url(#wshadow)"/>`;
   });
 
@@ -1667,11 +1671,11 @@ function renderHexGrid(portData, total) {
     const valDy  = isBottom ? '7'  : '-2';
 
     icons += `
-      <text font-size="11" font-weight="700" fill="#fff" opacity="${opacity}"
+      <text font-size="11" font-weight="700" fill="#1a1a1a" opacity="${opacity}"
         font-family="DM Sans,sans-serif" dy="${nameDy}">
         <textPath href="#lp${i}" startOffset="5%">${shortLabel}</textPath>
       </text>
-      <text font-size="10.5" font-weight="600" fill="rgba(255,255,255,0.95)" opacity="${opacity}"
+      <text font-size="10.5" font-weight="600" fill="#333333" opacity="${opacity}"
         font-family="DM Sans,sans-serif" dy="${valDy}">
         <textPath href="#rp${i}" startOffset="5%">${valStr}</textPath>
       </text>`;
