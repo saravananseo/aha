@@ -1371,20 +1371,126 @@ function renderDashboard() {
   });
   document.getElementById('d-savings').innerHTML = savHTML || '<div class="empty">No data yet for '+currentYear+'</div>';
 
-  // Income source — spiral concentric ring chart
-  // Income source bars
-  const incTotal = Object.values(incBreak).reduce((s,v)=>s+v,0);
-  let incHTML = '';
-  Object.entries(incBreak).forEach(([k,v]) => {
-    if (!v) return;
-    const pct = incTotal > 0 ? (v/incTotal*100) : 0;
-    incHTML += `<div class="pr-row"><div class="pr-l" style="text-transform:capitalize;">${k}</div><div class="pr-bar"><div class="pr-f" style="width:${pct.toFixed(1)}%"></div></div><div class="pr-p">${fmtK(v)}</div></div>`;
-  });
-  document.getElementById('d-inc-src').innerHTML = incHTML || '<div class="empty">No income data yet</div>';
+  // Income sources — connected box infographic
+  renderIncomeBoxes(incBreak);
 
   // Charts
   drawPnlChart();
   drawExpChart(expBreak);
+}
+
+function renderIncomeBoxes(incBreak) {
+  const wrap = document.getElementById('d-inc-src');
+  if (!wrap) return;
+
+  const KEYS   = ['salary','interest','dividend','hedging','others'];
+  const LABELS = ['Salary','Interest','Dividend','Hedging','Others'];
+  const COLS   = ['#e53935','#ff9800','#9c27b0','#2196f3','#009688'];
+  const ICONS  = ['💼','🏦','📊','🛡️','💡'];
+
+  const incTotal = Object.values(incBreak).reduce((s,v)=>s+v,0);
+  if (!incTotal) {
+    wrap.innerHTML = '<div class="empty">No income data yet</div>';
+    return;
+  }
+
+  const fmtV = v => v>=1e7?(v/1e7).toFixed(1)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+v.toLocaleString('en-IN');
+
+  // Layout: central big box on left, 5 small boxes fanned out on right
+  // Positions are percentage-based so it scales inside any card width
+  // We'll use an SVG-like HTML layout with absolute positioning inside a relative container
+
+  const sources = KEYS.map((k,i) => ({
+    key:k, label:LABELS[i], icon:ICONS[i], color:COLS[i],
+    val: incBreak[k]||0,
+    pct: incTotal > 0 ? (incBreak[k]||0)/incTotal*100 : 0
+  })).filter(s => s.val > 0);
+
+  // Y positions for 5 slots (evenly spaced), centred vertically
+  const N = sources.length;
+  const BOX_H = 54;   // small box height
+  const BOX_W = 98;   // small box width
+  const GAP   = 10;   // gap between boxes
+  const TOTAL_H = N * BOX_H + (N-1) * GAP;
+  const START_Y = 0;
+
+  const MAIN_W = 100;
+  const MAIN_H = Math.max(TOTAL_H, 90);
+  const CONTAINER_H = Math.max(TOTAL_H, MAIN_H) + 8;
+
+  // Central box HTML
+  const mainBox = `
+    <div style="position:absolute;left:0;top:50%;transform:translateY(-50%);
+      width:${MAIN_W}px;height:${MAIN_H}px;
+      background:var(--bg1);border-radius:16px;
+      box-shadow:0 4px 18px rgba(0,0,0,.13);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+      border:1.5px solid var(--bg3);">
+      <div style="font-size:9px;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;">Total Income</div>
+      <div style="font-size:15px;font-weight:800;color:var(--text);line-height:1.1;">${fmtV(incTotal)}</div>
+      <div style="font-size:8px;color:var(--muted);">${sources.length} sources</div>
+    </div>`;
+
+  // Each source box + connector line + label
+  const RIGHT_X = MAIN_W + 48;  // x position of small boxes (leaves room for connector)
+  const MID_X   = MAIN_W;       // connector starts here
+
+  let sourceBoxes = '';
+  sources.forEach((s, i) => {
+    const boxY = i * (BOX_H + GAP);
+    const boxMidY = boxY + BOX_H / 2;
+    const mainMidY = CONTAINER_H / 2;
+
+    // SVG connector line from main box right-edge to small box left-edge
+    // Path: horizontal out → elbow → vertical → elbow → horizontal in
+    const x0 = MAIN_W;
+    const y0 = CONTAINER_H / 2;
+    const xMid = MAIN_W + 22;
+    const y1 = boxMidY;
+    const x1 = RIGHT_X;
+
+    const hasVal = s.val > 0;
+
+    sourceBoxes += `
+      <svg style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;"
+           xmlns="http://www.w3.org/2000/svg">
+        <path d="M${x0},${y0} C${xMid},${y0} ${xMid},${y1} ${x1},${y1}"
+          fill="none" stroke="${s.color}" stroke-width="1.8"
+          stroke-dasharray="${hasVal?'none':'4,3'}" opacity="${hasVal?0.7:0.3}"/>
+        <circle cx="${x0}" cy="${y0}" r="3" fill="${s.color}" opacity="0.7"/>
+        <circle cx="${x1}" cy="${y1}" r="3" fill="${s.color}" opacity="0.7"/>
+      </svg>
+      <div style="position:absolute;left:${RIGHT_X}px;top:${boxY}px;
+        width:${BOX_W}px;height:${BOX_H}px;">
+        <!-- small box -->
+        <div style="width:100%;height:100%;background:var(--bg1);border-radius:12px;
+          box-shadow:0 3px 12px rgba(0,0,0,.10);
+          border:1.5px solid ${s.color}33;
+          display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+          position:relative;overflow:hidden;">
+          <!-- colour accent top bar -->
+          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${s.color};border-radius:12px 12px 0 0;"></div>
+          <div style="font-size:13px;line-height:1;">${s.icon}</div>
+          <div style="font-size:11px;font-weight:800;color:var(--text);">${fmtV(s.val)}</div>
+          <div style="font-size:8px;color:${s.color};font-weight:600;">${s.pct.toFixed(1)}%</div>
+        </div>
+        <!-- source name label to the right -->
+        <div style="position:absolute;left:${BOX_W+8}px;top:50%;transform:translateY(-50%);
+          white-space:nowrap;">
+          <div style="font-size:10px;font-weight:700;color:${s.color};">${s.label}</div>
+        </div>
+      </div>`;
+  });
+
+  // Total container width = main box + gap + small box + label margin
+  const CONT_W = MAIN_W + 48 + BOX_W + 64;
+
+  wrap.innerHTML = `
+    <div style="position:relative;width:${CONT_W}px;height:${CONTAINER_H}px;
+      margin:0 auto;max-width:100%;">
+      ${mainBox}
+      ${sourceBoxes}
+    </div>`;
 }
 
 function drawPnlChart() {
