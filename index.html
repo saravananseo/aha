@@ -1404,7 +1404,7 @@ function renderIncomeBoxes(incBreak) {
     key:k, label:LABELS[i], icon:ICONS[i], color:COLS[i],
     val: incBreak[k]||0,
     pct: incTotal > 0 ? (incBreak[k]||0)/incTotal*100 : 0
-  })).filter(s => s.val > 0);
+  })).filter(s => s.val > 0).sort((a,b) => b.val - a.val); // highest value at top
 
   // Y positions for 5 slots (evenly spaced), centred vertically
   const N = sources.length;
