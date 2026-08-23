@@ -1394,141 +1394,144 @@ function drawSankeyChart(incBreak, expBreak, ytdInc, ytdExp, ytdPl) {
   if (!wrap) return;
   if (!ytdInc && !ytdExp) { wrap.innerHTML = '<div class="empty">No data yet</div>'; return; }
 
-  const fmtV = v => v>=1e7?(v/1e7).toFixed(1)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+Math.round(v).toLocaleString('en-IN');
+  const fmtV = v => v>=1e7?(v/1e7).toFixed(2)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+Math.round(v).toLocaleString('en-IN');
 
-  // ── Node definitions ─────────────────────────────────────────────
-  // Left column: income sources
-  // Middle column: Total Income node
-  // Right column: expense categories + net savings
   const INC_KEYS   = ['salary','interest','dividend','hedging','others'];
   const INC_LABELS = ['Salary','Interest','Dividend','Hedging','Others'];
   const INC_COLS   = ['#e53935','#ff9800','#9c27b0','#2196f3','#009688'];
-
   const EXP_KEYS   = ['food','cloths','medical','travel','education','rent','others'];
   const EXP_LABELS = ['Food','Clothing','Medical','Travel','Education','Rent','Others'];
   const EXP_COLS   = ['#ef5350','#ab47bc','#26a69a','#42a5f5','#ffca28','#ec407a','#78909c'];
 
-  // Filter out zero values
-  const incSources = INC_KEYS.map((k,i) => ({k, label:INC_LABELS[i], col:INC_COLS[i], val:incBreak[k]||0})).filter(x=>x.val>0);
-  const expItems   = EXP_KEYS.map((k,i) => ({k, label:EXP_LABELS[i], col:EXP_COLS[i], val:expBreak[k]||0})).filter(x=>x.val>0);
+  const incSrc  = INC_KEYS.map((k,i)=>({label:INC_LABELS[i],col:INC_COLS[i],val:incBreak[k]||0})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
+  const expItems= EXP_KEYS.map((k,i)=>({label:EXP_LABELS[i],col:EXP_COLS[i],val:expBreak[k]||0})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
+  const savings = ytdPl>0 ? [{label:'Net Savings',col:'#c9a84c',val:ytdPl}] : [];
+  const rightItems = [...expItems,...savings];
 
-  if (!incSources.length && !expItems.length) { wrap.innerHTML='<div class="empty">No data yet</div>'; return; }
+  // ── Fixed viewBox: wide enough for labels on both sides ──────────
+  const VW = 500, LABEL_W = 110;
+  const COL0_X = LABEL_W + 8;          // left node bar x
+  const NODE_W = 14;                    // node bar width
+  const COL1_X = VW/2 - NODE_W/2;      // centre node x
+  const COL2_X = VW - LABEL_W - 8 - NODE_W; // right node bar x
+  const MIN_H  = 14, GAP = 8;
 
-  // ── Layout ───────────────────────────────────────────────────────
-  const W = Math.min(wrap.clientWidth || 320, 360);
-  const colW   = 64;   // node column width
-  const nodeW  = 12;   // node bar width
-  const nodeGap = 6;   // gap between nodes in same column
-  const padL   = 4, padR = 4, padT = 10, padB = 18;
-  const innerH = Math.max(180,
-    Math.max(incSources.length, expItems.length + 1) * 28 + 60
+  // ── Scale node heights to fill a fixed canvas ────────────────────
+  const CANVAS_H = Math.max(
+    incSrc.length*(MIN_H+GAP)+40,
+    rightItems.length*(MIN_H+GAP)+40,
+    220
   );
-  const H = innerH + padT + padB;
+  const VH = CANVAS_H + 60; // extra for top/bottom labels
 
-  // Column x positions
-  const col0x = padL;                             // income source nodes
-  const col1x = padL + colW + 20;                 // total income node
-  const col2x = W - padR - colW - 20;             // expense/savings nodes
+  const PAD_T = 30;
 
-  // ── Place nodes ─────────────────────────────────────────────────
-  function placeNodes(items, colX, totalH) {
-    const totalVal = items.reduce((s,x)=>s+x.val,0);
-    const usableH = totalH - (items.length-1)*nodeGap;
-    let y = 0;
-    return items.map(x => {
-      const h = totalVal > 0 ? Math.max(8, (x.val/totalVal)*usableH) : 20;
-      const node = {...x, x:colX, y, h};
-      y += h + nodeGap;
-      return node;
+  function scaleNodes(items, availH) {
+    const tot = items.reduce((s,x)=>s+x.val,0)||1;
+    const totalGap = (items.length-1)*GAP;
+    const barSpace = availH - totalGap;
+    let y = PAD_T;
+    return items.map(x=>{
+      const h = Math.max(MIN_H, (x.val/tot)*barSpace);
+      const n = {...x, y, h};
+      y += h+GAP;
+      return n;
     });
   }
 
-  // Centre nodes vertically within H
-  function centreNodes(nodes) {
-    const total = nodes.reduce((s,n)=>s+n.h+nodeGap,0) - nodeGap;
-    const offset = (innerH - total)/2;
-    return nodes.map(n=>({...n, y:n.y+offset+padT}));
+  // ── Centre nodes vertically ──────────────────────────────────────
+  function centreV(nodes, targetCY) {
+    const used = nodes.reduce((s,n)=>s+n.h+GAP,0)-GAP;
+    const offset = targetCY - used/2 - PAD_T;
+    return nodes.map(n=>({...n,y:n.y+offset}));
   }
 
-  // Income source nodes (left column) — scaled to ytdInc
-  const incTotalVal = incSources.reduce((s,x)=>s+x.val,0)||1;
-  const incNodes = centreNodes(placeNodes(incSources.map(x=>({...x,val:x.val})), col0x, innerH));
+  const midCY = VH/2;
+  const incNodes   = centreV(scaleNodes(incSrc, CANVAS_H), midCY);
+  const rightNodes = centreV(scaleNodes(rightItems, CANVAS_H), midCY);
 
-  // Total Income node (middle) — single tall bar
-  const midH = Math.max(40, innerH * 0.7);
-  const midNode = { label:'Total Income', val:ytdInc, col:'#4caf50', x:col1x, y:padT+(innerH-midH)/2, h:midH };
+  // Mid node spans full height of whichever side is taller
+  const incTop  = incNodes[0]?.y   ?? midCY-40;
+  const incBot  = (incNodes[incNodes.length-1]?.y??midCY) + (incNodes[incNodes.length-1]?.h??0);
+  const rTop    = rightNodes[0]?.y  ?? midCY-40;
+  const rBot    = (rightNodes[rightNodes.length-1]?.y??midCY) + (rightNodes[rightNodes.length-1]?.h??0);
+  const midTop  = Math.min(incTop, rTop);
+  const midBot  = Math.max(incBot, rBot);
+  const midH    = Math.max(40, midBot - midTop);
+  const midNode = {label:'Total Income', val:ytdInc, col:'#4caf50', x:COL1_X, y:midTop, h:midH};
 
-  // Expense nodes + Net Savings (right column)
-  const savings = ytdPl > 0 ? [{k:'savings', label:'Net Savings', col:'#c9a84c', val:ytdPl}] : [];
-  const rightItems = [...expItems, ...savings];
-  const rightNodes = centreNodes(placeNodes(rightItems, col2x, innerH));
-
-  // ── SVG ─────────────────────────────────────────────────────────
-  let paths = '', nodes = '', labels = '';
-
-  // Helper: cubic bezier ribbon between two nodes
-  function ribbon(x0, y0, h0, x1, y1, h1, col, opacity=0.35) {
+  // ── Ribbon helper ────────────────────────────────────────────────
+  function ribbon(x0,y0,h0, x1,y1,h1, col) {
     const mx = (x0+x1)/2;
-    return `<path d="
-      M${(x0+nodeW).toFixed(1)},${y0.toFixed(1)}
-      C${mx.toFixed(1)},${y0.toFixed(1)} ${mx.toFixed(1)},${y1.toFixed(1)} ${(x1).toFixed(1)},${y1.toFixed(1)}
-      L${(x1).toFixed(1)},${(y1+h1).toFixed(1)}
-      C${mx.toFixed(1)},${(y1+h1).toFixed(1)} ${mx.toFixed(1)},${(y0+h0).toFixed(1)} ${(x0+nodeW).toFixed(1)},${(y0+h0).toFixed(1)}
-      Z" fill="${col}" opacity="${opacity}"/>`;
+    const p = `M${x0},${y0} C${mx},${y0} ${mx},${y1} ${x1},${y1}
+               L${x1},${y1+h1} C${mx},${y1+h1} ${mx},${y0+h0} ${x0},${y0+h0} Z`;
+    return `<path d="${p}" fill="${col}" opacity="0.28"/>`;
   }
 
-  // Left→Middle ribbons: each income source → total income
-  // Distribute the mid node height proportionally
-  let midY = midNode.y;
+  let paths='', nodeSVG='', labelSVG='';
+
+  // Left → Centre ribbons
+  let mY = midNode.y;
   const incTot = incNodes.reduce((s,n)=>s+n.val,0)||1;
-  incNodes.forEach(n => {
-    const sliceH = (n.val/incTot) * midNode.h;
-    paths += ribbon(n.x, n.y, n.h, midNode.x, midY, sliceH, n.col, 0.30);
-    midY += sliceH;
+  incNodes.forEach(n=>{
+    const sh = Math.max(1,(n.val/incTot)*midNode.h);
+    paths += ribbon(COL0_X+NODE_W, n.y, n.h, COL1_X, mY, sh, n.col);
+    mY += sh;
   });
 
-  // Middle→Right ribbons: total income → expenses + savings
-  let midY2 = midNode.y;
-  const rightTot = rightNodes.reduce((s,n)=>s+n.val,0)||1;
-  rightNodes.forEach(n => {
-    const sliceH = Math.max(1, (n.val/rightTot) * midNode.h);
-    paths += ribbon(midNode.x, midY2, sliceH, n.x, n.y, n.h, n.col, 0.30);
-    midY2 += sliceH;
+  // Centre → Right ribbons
+  let mY2 = midNode.y;
+  const rTot = rightNodes.reduce((s,n)=>s+n.val,0)||1;
+  rightNodes.forEach(n=>{
+    const sh = Math.max(1,(n.val/rTot)*midNode.h);
+    paths += ribbon(COL1_X+NODE_W, mY2, sh, COL2_X, n.y, n.h, n.col);
+    mY2 += sh;
   });
 
-  // Draw nodes
-  function drawNode(n, side) {
-    // bar
-    nodes += `<rect x="${n.x.toFixed(1)}" y="${n.y.toFixed(1)}" width="${nodeW}" height="${n.h.toFixed(1)}"
-      fill="${n.col}" rx="3"/>`;
-    // label
-    const lx = side==='left'  ? n.x - 4 : n.x + nodeW + 4;
-    const anchor = side==='left' ? 'end' : 'start';
-    const ly = n.y + n.h/2;
-    labels += `<text x="${lx.toFixed(1)}" y="${(ly-5).toFixed(1)}" text-anchor="${anchor}"
-      font-size="7.5" font-weight="600" fill="${n.col}" font-family="DM Sans,sans-serif">${n.label}</text>
-    <text x="${lx.toFixed(1)}" y="${(ly+6).toFixed(1)}" text-anchor="${anchor}"
-      font-size="7" fill="var(--text,#333)" font-family="DM Sans,sans-serif">${fmtV(n.val)}</text>`;
+  // Draw a node bar
+  function bar(x,y,h,col){
+    nodeSVG += `<rect x="${x}" y="${y.toFixed(1)}" width="${NODE_W}" height="${h.toFixed(1)}" fill="${col}" rx="4"/>`;
   }
 
-  incNodes.forEach(n => drawNode(n,'left'));
-  rightNodes.forEach(n => drawNode(n,'right'));
+  // Left labels (right-aligned, ending at node bar)
+  incNodes.forEach(n=>{
+    bar(COL0_X, n.y, n.h, n.col);
+    const ly = n.y + n.h/2;
+    labelSVG += `
+      <text x="${COL0_X-8}" y="${(ly-5).toFixed(1)}" text-anchor="end"
+        font-size="9" font-weight="700" fill="${n.col}" font-family="DM Sans,sans-serif">${n.label}</text>
+      <text x="${COL0_X-8}" y="${(ly+7).toFixed(1)}" text-anchor="end"
+        font-size="8.5" fill="#555" font-family="DM Sans,sans-serif">${fmtV(n.val)}</text>`;
+  });
 
-  // Middle node
-  nodes += `<rect x="${midNode.x.toFixed(1)}" y="${midNode.y.toFixed(1)}" width="${nodeW}" height="${midNode.h.toFixed(1)}"
-    fill="${midNode.col}" rx="3"/>`;
-  labels += `<text x="${(midNode.x+nodeW/2).toFixed(1)}" y="${(midNode.y-6).toFixed(1)}"
-    text-anchor="middle" font-size="7.5" font-weight="700" fill="${midNode.col}"
-    font-family="DM Sans,sans-serif">Total Income</text>
-  <text x="${(midNode.x+nodeW/2).toFixed(1)}" y="${(midNode.y+midNode.h+12).toFixed(1)}"
-    text-anchor="middle" font-size="7" fill="var(--text,#333)"
-    font-family="DM Sans,sans-serif">${fmtV(ytdInc)}</text>`;
+  // Right labels (left-aligned, starting from node bar right edge)
+  rightNodes.forEach(n=>{
+    bar(COL2_X, n.y, n.h, n.col);
+    const ly = n.y + n.h/2;
+    // colour dot
+    labelSVG += `
+      <circle cx="${COL2_X+NODE_W+10}" cy="${(ly-3).toFixed(1)}" r="5" fill="${n.col}"/>
+      <text x="${COL2_X+NODE_W+20}" y="${(ly-8).toFixed(1)}"
+        font-size="9" font-weight="700" fill="${n.col}" font-family="DM Sans,sans-serif">${n.label}</text>
+      <text x="${COL2_X+NODE_W+20}" y="${(ly+5).toFixed(1)}"
+        font-size="8.5" fill="#555" font-family="DM Sans,sans-serif">${fmtV(n.val)}</text>`;
+  });
+
+  // Centre node + labels above/below
+  bar(COL1_X, midNode.y, midNode.h, midNode.col);
+  labelSVG += `
+    <text x="${COL1_X+NODE_W/2}" y="${(midNode.y-10).toFixed(1)}" text-anchor="middle"
+      font-size="10" font-weight="700" fill="${midNode.col}" font-family="DM Sans,sans-serif">Total Income</text>
+    <text x="${COL1_X+NODE_W/2}" y="${(midNode.y+midNode.h+16).toFixed(1)}" text-anchor="middle"
+      font-size="9" fill="#555" font-family="DM Sans,sans-serif">${fmtV(ytdInc)}</text>`;
 
   wrap.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}"
-      style="display:block;overflow:visible;">
-      ${paths}${nodes}${labels}
-    </svg>`;
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <svg viewBox="0 0 ${VW} ${VH}" width="${VW}" height="${VH}"
+        style="display:block;min-width:${VW}px;">
+        ${paths}${nodeSVG}${labelSVG}
+      </svg>
+    </div>`;
 }
 
 
