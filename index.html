@@ -307,6 +307,10 @@
   box-shadow:0 2px 8px rgba(13,127,110,.15);
 }
 
+/* ── Hero balance card arrows ── */
+[data-theme="light"] .hero-arrow-up   { color:#065f46; }
+[data-theme="light"] .hero-arrow-down { color:#991b1b; }
+
 [data-theme="light"] #gl-search{ background:#f8fafc; border-color:#e2e8f0; color:var(--text); }
 [data-theme="light"] #gl-search:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(13,127,110,.1); }
 
@@ -676,8 +680,7 @@ tr:hover td{background:var(--gold-dim);}
 
     <!-- ═══ DASHBOARD ═══ -->
     <div class="tab active" id="tab-dashboard">
-      <div class="kg c2" id="d-kpi1"></div>
-      <div class="kg c2" id="d-kpi2"></div>
+      <div id="d-hero-card"></div>
       <div class="card"><div class="card-title">Monthly P&amp;L Trend</div><div class="ch h180"><canvas id="cPnl"></canvas></div></div>
       <div class="card"><div class="card-title">Monthly Asset Trend</div><div class="ch h180"><canvas id="cAsset"></canvas></div></div>
       <div class="card"><div class="card-title">Savings Rate by Month</div><div id="d-savings"></div></div>
@@ -1353,12 +1356,61 @@ function renderDashboard() {
   const latestPort = portMonths.length ? D.portfolio[`m${portMonths[0]}`] : null;
   const portTotal  = latestPort ? ASSET_KEYS.reduce((s,k)=>s+(latestPort[k]||0),0) : 0;
 
-  document.getElementById('d-kpi1').innerHTML = `
-    <div class="kpi"><div class="kl">YTD Income</div><div class="kv">${fmtK(ytdInc)}</div></div>
-    <div class="kpi"><div class="kl">YTD Expense</div><div class="kv r">${fmtK(ytdExp)}</div></div>`;
-  document.getElementById('d-kpi2').innerHTML = `
-    <div class="kpi"><div class="kl">Net Profit</div><div class="kv g">${fmtK(ytdPl)}</div></div>
-    <div class="kpi"><div class="kl">Savings Rate</div><div class="kv g">${savPct}%</div></div>`;
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const heroBg  = isDark
+    ? 'linear-gradient(135deg,#0d2137 0%,#0a1628 60%,#0d2137 100%)'
+    : 'linear-gradient(135deg,#0d7f6e 0%,#0a5e52 60%,#1a6fc4 100%)';
+  const dc1 = isDark?'rgba(26,111,196,0.55)':'rgba(255,255,255,0.22)';
+  const dc2 = isDark?'rgba(201,168,76,0.50)':'rgba(255,210,80,0.55)';
+  const dc3 = isDark?'rgba(13,127,110,0.45)':'rgba(255,255,255,0.18)';
+  const balCol = ytdPl>=0?'#a7f3d0':'#fca5a5';
+
+  document.getElementById('d-hero-card').innerHTML = `
+    <div style="position:relative;border-radius:20px;overflow:hidden;
+      background:${heroBg};padding:22px 20px 16px;margin-bottom:10px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.28);">
+      <div style="position:absolute;top:-28px;right:-28px;width:90px;height:90px;
+        border-radius:50%;background:${dc1};pointer-events:none;"></div>
+      <div style="position:absolute;top:-10px;right:40px;width:60px;height:60px;
+        border-radius:50%;background:${dc2};pointer-events:none;"></div>
+      <div style="position:absolute;bottom:-24px;left:-20px;width:80px;height:80px;
+        border-radius:50%;background:${dc3};pointer-events:none;"></div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.65);font-weight:500;
+        letter-spacing:0.4px;margin-bottom:4px;">Total Balance</div>
+      <div style="font-size:34px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;
+        line-height:1.1;margin-bottom:5px;">${fmtK(ytdPl)}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:16px;">
+        Savings Rate &nbsp;<span style="color:${balCol};font-weight:700;">${savPct}%</span>&nbsp;of income
+      </div>
+      <div style="height:1px;background:rgba(255,255,255,0.12);margin-bottom:14px;"></div>
+      <div style="display:flex;align-items:center;">
+        <div style="flex:1;display:flex;align-items:center;gap:10px;">
+          <div style="width:36px;height:36px;border-radius:50%;background:rgba(167,243,208,0.18);
+            display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M12 19V5M5 12l7-7 7 7" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.55);">Income</div>
+            <div style="font-size:18px;font-weight:800;color:#a7f3d0;">${fmtK(ytdInc)}</div>
+          </div>
+        </div>
+        <div style="width:1px;height:46px;background:rgba(255,255,255,0.15);margin:0 8px;"></div>
+        <div style="flex:1;display:flex;align-items:center;gap:10px;justify-content:flex-end;">
+          <div style="text-align:right;">
+            <div style="font-size:11px;color:rgba(255,255,255,0.55);">Expenses</div>
+            <div style="font-size:18px;font-weight:800;color:#fca5a5;">${fmtK(ytdExp)}</div>
+          </div>
+          <div style="width:36px;height:36px;border-radius:50%;background:rgba(252,165,165,0.18);
+            display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M12 5v14M5 12l7 7 7-7" stroke="#fca5a5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>`;
 
   // Savings by month
   const months = MSHORT.filter((_,i) => getMonthAgg(i).income > 0);
