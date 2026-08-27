@@ -678,7 +678,7 @@ tr:hover td{background:var(--gold-dim);}
     <div class="tab active" id="tab-dashboard">
       <div class="kg c2" id="d-kpi1"></div>
       <div class="kg c2" id="d-kpi2"></div>
-      <div class="card" style="background:linear-gradient(135deg,#0a1628 0%,#0d2137 60%,#071a10 100%);border:1px solid rgba(201,168,76,.2);"><div class="card-title" style="color:#c9a84c;letter-spacing:1px;">Monthly P&L Trend</div><div id="pnl-glow-chart" style="width:100%;"></div></div>
+      <div class="card"><div class="card-title">Monthly P&amp;L Trend</div><div class="ch h180"><canvas id="cPnl"></canvas></div></div>
       <div class="card"><div class="card-title">Monthly Asset Trend</div><div class="ch h180"><canvas id="cAsset"></canvas></div></div>
       <div class="card"><div class="card-title">Savings Rate by Month</div><div id="d-savings"></div></div>
       <div class="card"><div class="card-title">YTD Expense Breakdown</div><div class="ch h200"><canvas id="cExp"></canvas></div></div>
@@ -1650,178 +1650,27 @@ function renderIncomeBoxes(incBreak) {
 }
 
 function drawPnlChart() {
-  const wrap = document.getElementById('pnl-glow-chart');
-  if (!wrap) return;
-
-  const months=[], incData=[], expData=[], plData=[];
+  const labels=[], incData=[], expData=[], plData=[];
   MSHORT.forEach((m,i) => {
     const a = getMonthAgg(i);
     if (!a.income && !a.expense) return;
-    months.push(m); incData.push(a.income); expData.push(a.expense); plData.push(a.pl);
+    labels.push(m); incData.push(a.income); expData.push(a.expense); plData.push(a.pl);
   });
-
-  if (!months.length) { wrap.innerHTML='<div class="empty" style="color:#555;padding:40px 0;text-align:center;">No data yet</div>'; return; }
-
-  const fmtV = v => v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+Math.round(v);
-
-  // ── Layout ────────────────────────────────────────
-  const N    = months.length;
-  const VW   = 320, PAD_L=38, PAD_R=14, PAD_T=24, PAD_B=36;
-  const chartW = VW - PAD_L - PAD_R;
-  const chartH = 180;
-  const VH   = chartH + PAD_T + PAD_B;
-
-  const barW   = Math.min(28, (chartW/N)*0.55);
-  const barGap = chartW / N;
-
-  const allVals = [...incData,...expData,...plData.map(v=>Math.abs(v))];
-  const maxV    = Math.max(...allVals, 1);
-  const minV    = Math.min(...plData, 0);
-  const range   = maxV - minV || 1;
-
-  const toY = v => PAD_T + chartH - ((v - minV) / range) * chartH;
-  const barX = i => PAD_L + i * barGap + barGap/2;
-
-  // ── Grid lines ────────────────────────────────────
-  let grid = '';
-  const ticks = 4;
-  for (let t=0; t<=ticks; t++) {
-    const v   = minV + (range/ticks)*t;
-    const y   = toY(v);
-    const lbl = fmtV(v);
-    grid += `<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${VW-PAD_R}" y2="${y.toFixed(1)}"
-      stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-    <text x="${PAD_L-4}" y="${(y+4).toFixed(1)}" text-anchor="end"
-      font-size="7" fill="rgba(255,255,255,0.3)" font-family="DM Sans,sans-serif">${lbl}</text>`;
-  }
-  // Zero line
-  if (minV < 0) {
-    const zy = toY(0);
-    grid += `<line x1="${PAD_L}" y1="${zy.toFixed(1)}" x2="${VW-PAD_R}" y2="${zy.toFixed(1)}"
-      stroke="rgba(255,255,255,0.18)" stroke-width="0.8" stroke-dasharray="3,3"/>`;
-  }
-
-  // ── Bars ──────────────────────────────────────────
-  let bars = '';
-  months.forEach((_,i) => {
-    const cx   = barX(i);
-    const incY = toY(incData[i]), incH = Math.max(2, toY(0)-incY);
-    const expY = toY(expData[i]), expH = Math.max(2, toY(0)-expY);
-    const isProfit = plData[i] >= 0;
-
-    // Income bar — golden glass
-    bars += `
-      <defs>
-        <linearGradient id="gInc${i}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#ffd54f" stop-opacity="0.9"/>
-          <stop offset="100%" stop-color="#c9a84c" stop-opacity="0.4"/>
-        </linearGradient>
-        <linearGradient id="gExp${i}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#ef5350" stop-opacity="0.85"/>
-          <stop offset="100%" stop-color="#b71c1c" stop-opacity="0.35"/>
-        </linearGradient>
-        <filter id="glow${i}">
-          <feGaussianBlur stdDeviation="2.5" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-      </defs>
-      <!-- Income bar -->
-      <rect x="${(cx - barW - 1).toFixed(1)}" y="${incY.toFixed(1)}"
-        width="${barW}" height="${incH.toFixed(1)}"
-        fill="url(#gInc${i})" rx="3" filter="url(#glow${i})"/>
-      <!-- glass sheen on income bar -->
-      <rect x="${(cx - barW - 1).toFixed(1)}" y="${incY.toFixed(1)}"
-        width="${(barW*0.35).toFixed(1)}" height="${incH.toFixed(1)}"
-        fill="rgba(255,255,255,0.12)" rx="3"/>
-      <!-- Expense bar -->
-      <rect x="${(cx+1).toFixed(1)}" y="${expY.toFixed(1)}"
-        width="${barW}" height="${expH.toFixed(1)}"
-        fill="url(#gExp${i})" rx="3" filter="url(#glow${i})"/>
-      <!-- glass sheen on expense bar -->
-      <rect x="${(cx+1).toFixed(1)}" y="${expY.toFixed(1)}"
-        width="${(barW*0.35).toFixed(1)}" height="${expH.toFixed(1)}"
-        fill="rgba(255,255,255,0.10)" rx="3"/>`;
-
-    // Month label
-    bars += `<text x="${cx.toFixed(1)}" y="${(VH-6).toFixed(1)}"
-      text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.45)"
-      font-family="DM Sans,sans-serif">${months[i]}</text>`;
+  destroyChart('cPnl');
+  if (!labels.length) { document.getElementById('cPnl').style.display='none'; return; }
+  document.getElementById('cPnl').style.display='';
+  new Chart(document.getElementById('cPnl'), {
+    type:'bar',
+    data:{ labels, datasets:[
+      {label:'Income', data:incData, backgroundColor:'rgba(201,168,76,.7)', borderRadius:4},
+      {label:'Expense', data:expData, backgroundColor:'rgba(224,85,85,.6)', borderRadius:4},
+      {label:'Profit', data:plData, type:'line', borderColor:'#52b788', backgroundColor:'rgba(82,183,136,.1)', fill:false, tension:.4, pointRadius:4, pointBackgroundColor:'#52b788', borderWidth:2}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}},
+      scales:{y:{ticks:{callback:v=>'₹'+(v/1000).toFixed(0)+'K'}}}}
   });
-
-  // ── P&L glow line ─────────────────────────────────
-  const pts = months.map((_,i) => `${barX(i).toFixed(1)},${toY(plData[i]).toFixed(1)}`).join(' ');
-  // Smooth polyline via cubic bezier
-  const lineD = months.map((_,i) => {
-    const x=barX(i), y=toY(plData[i]);
-    if (i===0) return `M${x.toFixed(1)},${y.toFixed(1)}`;
-    const px=barX(i-1), py=toY(plData[i-1]);
-    const cpx=(px+x)/2;
-    return `C${cpx.toFixed(1)},${py.toFixed(1)} ${cpx.toFixed(1)},${y.toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-
-  // Arrow at the end of line
-  const lastX = barX(N-1), lastY = toY(plData[N-1]);
-  const prevX = N>1?barX(N-2):lastX-20, prevY=N>1?toY(plData[N-2]):lastY;
-  const ang   = Math.atan2(lastY-prevY, lastX-prevX);
-  const aLen  = 9, aWid = 5;
-  const arrowPts = [
-    `${(lastX + aLen*Math.cos(ang)).toFixed(1)},${(lastY + aLen*Math.sin(ang)).toFixed(1)}`,
-    `${(lastX + aWid*Math.cos(ang+Math.PI*0.7)).toFixed(1)},${(lastY + aWid*Math.sin(ang+Math.PI*0.7)).toFixed(1)}`,
-    `${(lastX + aWid*Math.cos(ang-Math.PI*0.7)).toFixed(1)},${(lastY + aWid*Math.sin(ang-Math.PI*0.7)).toFixed(1)}`
-  ].join(' ');
-
-  const glowLine = `
-    <defs>
-      <filter id="lineGlow">
-        <feGaussianBlur stdDeviation="3" result="blur"/>
-        <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-      </filter>
-      <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stop-color="#52b788"/>
-        <stop offset="100%" stop-color="#80ffb4"/>
-      </linearGradient>
-    </defs>
-    <!-- Glow halo -->
-    <path d="${lineD}" fill="none" stroke="#52b788" stroke-width="6" opacity="0.18"/>
-    <!-- Main line -->
-    <path d="${lineD}" fill="none" stroke="url(#lineGrad)" stroke-width="2.5"
-      stroke-linecap="round" filter="url(#lineGlow)"/>
-    <!-- Data points -->
-    ${months.map((_,i)=>{
-      const x=barX(i), y=toY(plData[i]);
-      const col = plData[i]>=0?'#80ffb4':'#ff6b6b';
-      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${col}" filter="url(#lineGlow)"/>
-              <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="#fff"/>`;
-    }).join('')}
-    <!-- Arrow -->
-    <polygon points="${arrowPts}" fill="#80ffb4" filter="url(#lineGlow)"/>`;
-
-  // ── Legend ────────────────────────────────────────
-  const legend = `
-    <g transform="translate(${PAD_L},${PAD_T-12})">
-      <rect x="0" y="0" width="8" height="8" fill="#c9a84c" rx="2"/>
-      <text x="11" y="7.5" font-size="8" fill="rgba(255,255,255,0.6)" font-family="DM Sans,sans-serif">Income</text>
-      <rect x="52" y="0" width="8" height="8" fill="#ef5350" rx="2"/>
-      <text x="63" y="7.5" font-size="8" fill="rgba(255,255,255,0.6)" font-family="DM Sans,sans-serif">Expense</text>
-      <line x1="115" y1="4" x2="129" y2="4" stroke="#52b788" stroke-width="2"/>
-      <circle cx="122" cy="4" r="2.5" fill="#80ffb4"/>
-      <text x="132" y="7.5" font-size="8" fill="rgba(255,255,255,0.6)" font-family="DM Sans,sans-serif">P&amp;L</text>
-    </g>`;
-
-  wrap.innerHTML = `
-    <svg viewBox="0 0 ${VW} ${VH}" width="100%" height="${VH}"
-      style="display:block;">
-      <!-- Background grid -->
-      ${grid}
-      <!-- Bars -->
-      ${bars}
-      <!-- Glow line + arrow -->
-      ${glowLine}
-      <!-- Legend -->
-      ${legend}
-    </svg>`;
 }
-
 function drawAssetTrendChart() {
   const labels = [], totalData = [];
   // Collect all months that have portfolio data, sorted Jan→Dec
