@@ -1403,132 +1403,134 @@ function drawSankeyChart(incBreak, expBreak, ytdInc, ytdExp, ytdPl) {
   const EXP_LABELS = ['Food','Clothing','Medical','Travel','Education','Rent','Others'];
   const EXP_COLS   = ['#ef5350','#ab47bc','#26a69a','#42a5f5','#ffca28','#ec407a','#78909c'];
 
-  const incSrc  = INC_KEYS.map((k,i)=>({label:INC_LABELS[i],col:INC_COLS[i],val:incBreak[k]||0})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
-  const expItems= EXP_KEYS.map((k,i)=>({label:EXP_LABELS[i],col:EXP_COLS[i],val:expBreak[k]||0})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
-  const savings = ytdPl>0 ? [{label:'Net Savings',col:'#c9a84c',val:ytdPl}] : [];
+  const incSrc   = INC_KEYS.map((k,i)=>({label:INC_LABELS[i],col:INC_COLS[i],val:incBreak[k]||0})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
+  const expItems = EXP_KEYS.map((k,i)=>({label:EXP_LABELS[i],col:EXP_COLS[i],val:expBreak[k]||0})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
+  const savings  = ytdPl>0?[{label:'Net Savings',col:'#c9a84c',val:ytdPl}]:[];
   const rightItems = [...expItems,...savings];
 
-  // ── Fixed viewBox: wide enough for labels on both sides ──────────
-  const VW = 500, LABEL_W = 110;
-  const COL0_X = LABEL_W + 8;          // left node bar x
-  const NODE_W = 14;                    // node bar width
-  const COL1_X = VW/2 - NODE_W/2;      // centre node x
-  const COL2_X = VW - LABEL_W - 8 - NODE_W; // right node bar x
-  const MIN_H  = 14, GAP = 8;
+  if (!incSrc.length && !rightItems.length) { wrap.innerHTML='<div class="empty">No data yet</div>'; return; }
 
-  // ── Scale node heights to fill a fixed canvas ────────────────────
-  const CANVAS_H = Math.max(
-    incSrc.length*(MIN_H+GAP)+40,
-    rightItems.length*(MIN_H+GAP)+40,
-    220
-  );
-  const VH = CANVAS_H + 60; // extra for top/bottom labels
+  // ── Fixed dimensions — no label zones beside nodes ────────────────
+  // Labels go ABOVE (name) and BELOW (value) each node bar
+  // so no horizontal space is wasted on labels
+  const NODE_W  = 16;
+  const NODE_GAP = 10;
+  const LABEL_H  = 28;   // space above node for name+value label
+  const MIN_NODE_H = 18;
 
-  const PAD_T = 30;
+  // Canvas area
+  const VW = 300;
+  const PAD_L = 18, PAD_R = 18;
+  const chartW = VW - PAD_L - PAD_R;
 
-  function scaleNodes(items, availH) {
+  // Column x positions — evenly split
+  const COL0_X = PAD_L;                       // left nodes (income)
+  const COL1_X = PAD_L + chartW/2 - NODE_W/2; // centre node
+  const COL2_X = PAD_L + chartW - NODE_W;     // right nodes (expense)
+
+  // Scale node heights proportionally within available height
+  function buildNodes(items, colX) {
     const tot = items.reduce((s,x)=>s+x.val,0)||1;
-    const totalGap = (items.length-1)*GAP;
-    const barSpace = availH - totalGap;
-    let y = PAD_T;
-    return items.map(x=>{
-      const h = Math.max(MIN_H, (x.val/tot)*barSpace);
-      const n = {...x, y, h};
-      y += h+GAP;
-      return n;
-    });
+    const nodes = items.map(x=>({
+      ...x,
+      h: Math.max(MIN_NODE_H, Math.round((x.val/tot)*300)),
+      x: colX
+    }));
+    // total height of this column
+    const totalH = nodes.reduce((s,n)=>s+n.h+NODE_GAP,0)-NODE_GAP;
+    return {nodes, totalH};
   }
 
-  // ── Centre nodes vertically ──────────────────────────────────────
-  function centreV(nodes, targetCY) {
-    const used = nodes.reduce((s,n)=>s+n.h+GAP,0)-GAP;
-    const offset = targetCY - used/2 - PAD_T;
-    return nodes.map(n=>({...n,y:n.y+offset}));
+  const {nodes:incNodes, totalH:incH} = buildNodes(incSrc, COL0_X);
+  const {nodes:rightNodes, totalH:rightH} = buildNodes(rightItems, COL2_X);
+
+  // Mid node height = max of both sides
+  const midH = Math.max(incH, rightH, 60);
+
+  // Total SVG height = LABEL_H top + tallest column + LABEL_H bottom
+  const colMaxH = Math.max(incH, rightH, midH);
+  const PAD_T = LABEL_H + 10;
+  const PAD_B = LABEL_H + 10;
+  const VH = colMaxH + PAD_T + PAD_B;
+
+  // Vertically centre each column around mid-point
+  function centreY(nodes, totalH) {
+    const startY = PAD_T + (colMaxH - totalH) / 2;
+    let y = startY;
+    return nodes.map(n => { const node={...n,y}; y+=n.h+NODE_GAP; return node; });
   }
 
-  const midCY = VH/2;
-  const incNodes   = centreV(scaleNodes(incSrc, CANVAS_H), midCY);
-  const rightNodes = centreV(scaleNodes(rightItems, CANVAS_H), midCY);
+  const iNodes = centreY(incNodes, incH);
+  const rNodes = centreY(rightNodes, rightH);
+  const midY   = PAD_T + (colMaxH - midH) / 2;
+  const midNode = { label:'Total Income', val:ytdInc, col:'#4caf50',
+                    x:COL1_X, y:midY, h:midH };
 
-  // Mid node spans full height of whichever side is taller
-  const incTop  = incNodes[0]?.y   ?? midCY-40;
-  const incBot  = (incNodes[incNodes.length-1]?.y??midCY) + (incNodes[incNodes.length-1]?.h??0);
-  const rTop    = rightNodes[0]?.y  ?? midCY-40;
-  const rBot    = (rightNodes[rightNodes.length-1]?.y??midCY) + (rightNodes[rightNodes.length-1]?.h??0);
-  const midTop  = Math.min(incTop, rTop);
-  const midBot  = Math.max(incBot, rBot);
-  const midH    = Math.max(40, midBot - midTop);
-  const midNode = {label:'Total Income', val:ytdInc, col:'#4caf50', x:COL1_X, y:midTop, h:midH};
-
-  // ── Ribbon helper ────────────────────────────────────────────────
+  // ── Ribbon ───────────────────────────────────────────────────────
   function ribbon(x0,y0,h0, x1,y1,h1, col) {
-    const mx = (x0+x1)/2;
-    const p = `M${x0},${y0} C${mx},${y0} ${mx},${y1} ${x1},${y1}
-               L${x1},${y1+h1} C${mx},${y1+h1} ${mx},${y0+h0} ${x0},${y0+h0} Z`;
-    return `<path d="${p}" fill="${col}" opacity="0.28"/>`;
+    const mx=(x0+x1)/2;
+    return `<path d="M${x0},${y0} C${mx},${y0} ${mx},${y1} ${x1},${y1}
+      L${x1},${(y1+h1)} C${mx},${(y1+h1)} ${mx},${(y0+h0)} ${x0},${(y0+h0)} Z"
+      fill="${col}" opacity="0.28"/>`;
   }
 
   let paths='', nodeSVG='', labelSVG='';
 
   // Left → Centre ribbons
-  let mY = midNode.y;
-  const incTot = incNodes.reduce((s,n)=>s+n.val,0)||1;
-  incNodes.forEach(n=>{
-    const sh = Math.max(1,(n.val/incTot)*midNode.h);
-    paths += ribbon(COL0_X+NODE_W, n.y, n.h, COL1_X, mY, sh, n.col);
-    mY += sh;
+  let mY=midNode.y;
+  const iTot=iNodes.reduce((s,n)=>s+n.val,0)||1;
+  iNodes.forEach(n=>{
+    const sh=Math.max(2,(n.val/iTot)*midNode.h);
+    paths+=ribbon(COL0_X+NODE_W,n.y,n.h, COL1_X,mY,sh, n.col);
+    mY+=sh;
   });
 
   // Centre → Right ribbons
-  let mY2 = midNode.y;
-  const rTot = rightNodes.reduce((s,n)=>s+n.val,0)||1;
-  rightNodes.forEach(n=>{
-    const sh = Math.max(1,(n.val/rTot)*midNode.h);
-    paths += ribbon(COL1_X+NODE_W, mY2, sh, COL2_X, n.y, n.h, n.col);
-    mY2 += sh;
+  let mY2=midNode.y;
+  const rTot=rNodes.reduce((s,n)=>s+n.val,0)||1;
+  rNodes.forEach(n=>{
+    const sh=Math.max(2,(n.val/rTot)*midNode.h);
+    paths+=ribbon(COL1_X+NODE_W,mY2,sh, COL2_X,n.y,n.h, n.col);
+    mY2+=sh;
   });
 
-  // Draw a node bar
-  function bar(x,y,h,col){
-    nodeSVG += `<rect x="${x}" y="${y.toFixed(1)}" width="${NODE_W}" height="${h.toFixed(1)}" fill="${col}" rx="4"/>`;
+  // Draw node bar
+  function bar(n){
+    nodeSVG+=`<rect x="${n.x}" y="${n.y.toFixed(1)}" width="${NODE_W}" height="${n.h.toFixed(1)}"
+      fill="${n.col}" rx="4"/>`;
   }
 
-  // Left labels (right-aligned, ending at node bar)
-  incNodes.forEach(n=>{
-    bar(COL0_X, n.y, n.h, n.col);
-    const ly = n.y + n.h/2;
-    labelSVG += `
-      <text x="${COL0_X-8}" y="${(ly-5).toFixed(1)}" text-anchor="end"
-        font-size="9" font-weight="700" fill="${n.col}" font-family="DM Sans,sans-serif">${n.label}</text>
-      <text x="${COL0_X-8}" y="${(ly+7).toFixed(1)}" text-anchor="end"
-        font-size="8.5" fill="#555" font-family="DM Sans,sans-serif">${fmtV(n.val)}</text>`;
-  });
+  // Label ABOVE node: name, BELOW: value — both centred on node x midpoint
+  function labelAbove(n, side) {
+    const mx = n.x + NODE_W/2;
+    const anchor = 'middle';
+    // name above top of node
+    labelSVG+=`<text x="${mx.toFixed(1)}" y="${(n.y-12).toFixed(1)}"
+      text-anchor="${anchor}" font-size="9" font-weight="700"
+      fill="${n.col}" font-family="DM Sans,sans-serif">${n.label}</text>`;
+    // value below name
+    labelSVG+=`<text x="${mx.toFixed(1)}" y="${(n.y-2).toFixed(1)}"
+      text-anchor="${anchor}" font-size="8" fill="var(--muted,#888)"
+      font-family="DM Sans,sans-serif">${fmtV(n.val)}</text>`;
+  }
 
-  // Right labels (left-aligned, starting from node bar right edge)
-  rightNodes.forEach(n=>{
-    bar(COL2_X, n.y, n.h, n.col);
-    const ly = n.y + n.h/2;
-    // colour dot
-    labelSVG += `
-      <circle cx="${COL2_X+NODE_W+10}" cy="${(ly-3).toFixed(1)}" r="5" fill="${n.col}"/>
-      <text x="${COL2_X+NODE_W+20}" y="${(ly-8).toFixed(1)}"
-        font-size="9" font-weight="700" fill="${n.col}" font-family="DM Sans,sans-serif">${n.label}</text>
-      <text x="${COL2_X+NODE_W+20}" y="${(ly+5).toFixed(1)}"
-        font-size="8.5" fill="#555" font-family="DM Sans,sans-serif">${fmtV(n.val)}</text>`;
-  });
+  iNodes.forEach(n=>{ bar(n); labelAbove(n,'left'); });
+  rNodes.forEach(n=>{ bar(n); labelAbove(n,'right'); });
 
-  // Centre node + labels above/below
-  bar(COL1_X, midNode.y, midNode.h, midNode.col);
-  labelSVG += `
-    <text x="${COL1_X+NODE_W/2}" y="${(midNode.y-10).toFixed(1)}" text-anchor="middle"
-      font-size="10" font-weight="700" fill="${midNode.col}" font-family="DM Sans,sans-serif">Total Income</text>
-    <text x="${COL1_X+NODE_W/2}" y="${(midNode.y+midNode.h+16).toFixed(1)}" text-anchor="middle"
-      font-size="9" fill="#555" font-family="DM Sans,sans-serif">${fmtV(ytdInc)}</text>`;
+  // Centre node
+  bar(midNode);
+  const mx=COL1_X+NODE_W/2;
+  labelSVG+=`<text x="${mx.toFixed(1)}" y="${(midNode.y-12).toFixed(1)}"
+    text-anchor="middle" font-size="9" font-weight="700"
+    fill="${midNode.col}" font-family="DM Sans,sans-serif">Total Income</text>
+  <text x="${mx.toFixed(1)}" y="${(midNode.y-2).toFixed(1)}"
+    text-anchor="middle" font-size="8" fill="var(--muted,#888)"
+    font-family="DM Sans,sans-serif">${fmtV(ytdInc)}</text>`;
 
-  wrap.innerHTML = `
-    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      <svg viewBox="0 0 ${VW} ${VH}" width="${VW}" height="${VH}"
-        style="display:block;min-width:${VW}px;">
+  wrap.innerHTML=`
+    <div style="overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:520px;">
+      <svg viewBox="0 0 ${VW} ${VH}" width="100%" height="${VH}"
+        style="display:block;">
         ${paths}${nodeSVG}${labelSVG}
       </svg>
     </div>`;
