@@ -678,7 +678,7 @@ tr:hover td{background:var(--gold-dim);}
     <div class="tab active" id="tab-dashboard">
       <div class="kg c2" id="d-kpi1"></div>
       <div class="kg c2" id="d-kpi2"></div>
-      <div class="card"><div class="card-title">Monthly P&amp;L Trend</div><div class="ch h180"><canvas id="cPnl"></canvas></div></div>
+      <div class="card" style="background:linear-gradient(135deg,#0a1628 0%,#0d2137 60%,#071a10 100%);border:1px solid rgba(201,168,76,.2);"><div class="card-title" style="color:#c9a84c;letter-spacing:1px;">Monthly P&L Trend</div><div id="pnl-glow-chart" style="width:100%;"></div></div>
       <div class="card"><div class="card-title">Monthly Asset Trend</div><div class="ch h180"><canvas id="cAsset"></canvas></div></div>
       <div class="card"><div class="card-title">Savings Rate by Month</div><div id="d-savings"></div></div>
       <div class="card"><div class="card-title">YTD Expense Breakdown</div><div class="ch h200"><canvas id="cExp"></canvas></div></div>
@@ -1394,141 +1394,144 @@ function drawSankeyChart(incBreak, expBreak, ytdInc, ytdExp, ytdPl) {
   if (!wrap) return;
   if (!ytdInc && !ytdExp) { wrap.innerHTML = '<div class="empty">No data yet</div>'; return; }
 
-  const fmtV = v => v>=1e7?(v/1e7).toFixed(1)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+Math.round(v).toLocaleString('en-IN');
+  const fmtV = v => v>=1e7?(v/1e7).toFixed(2)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+Math.round(v).toLocaleString('en-IN');
 
-  // ── Node definitions ─────────────────────────────────────────────
-  // Left column: income sources
-  // Middle column: Total Income node
-  // Right column: expense categories + net savings
   const INC_KEYS   = ['salary','interest','dividend','hedging','others'];
   const INC_LABELS = ['Salary','Interest','Dividend','Hedging','Others'];
   const INC_COLS   = ['#e53935','#ff9800','#9c27b0','#2196f3','#009688'];
-
   const EXP_KEYS   = ['food','cloths','medical','travel','education','rent','others'];
   const EXP_LABELS = ['Food','Clothing','Medical','Travel','Education','Rent','Others'];
   const EXP_COLS   = ['#ef5350','#ab47bc','#26a69a','#42a5f5','#ffca28','#ec407a','#78909c'];
 
-  // Filter out zero values
-  const incSources = INC_KEYS.map((k,i) => ({k, label:INC_LABELS[i], col:INC_COLS[i], val:incBreak[k]||0})).filter(x=>x.val>0);
-  const expItems   = EXP_KEYS.map((k,i) => ({k, label:EXP_LABELS[i], col:EXP_COLS[i], val:expBreak[k]||0})).filter(x=>x.val>0);
+  const incSrc  = INC_KEYS.map((k,i)=>({label:INC_LABELS[i],col:INC_COLS[i],val:incBreak[k]||0})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
+  const expItems= EXP_KEYS.map((k,i)=>({label:EXP_LABELS[i],col:EXP_COLS[i],val:expBreak[k]||0})).filter(x=>x.val>0).sort((a,b)=>b.val-a.val);
+  const savings = ytdPl>0 ? [{label:'Net Savings',col:'#c9a84c',val:ytdPl}] : [];
+  const rightItems = [...expItems,...savings];
 
-  if (!incSources.length && !expItems.length) { wrap.innerHTML='<div class="empty">No data yet</div>'; return; }
+  // ── Fixed viewBox: wide enough for labels on both sides ──────────
+  const VW = 500, LABEL_W = 110;
+  const COL0_X = LABEL_W + 8;          // left node bar x
+  const NODE_W = 14;                    // node bar width
+  const COL1_X = VW/2 - NODE_W/2;      // centre node x
+  const COL2_X = VW - LABEL_W - 8 - NODE_W; // right node bar x
+  const MIN_H  = 14, GAP = 8;
 
-  // ── Layout ───────────────────────────────────────────────────────
-  const W = Math.min(wrap.clientWidth || 320, 360);
-  const colW   = 64;   // node column width
-  const nodeW  = 12;   // node bar width
-  const nodeGap = 6;   // gap between nodes in same column
-  const padL   = 4, padR = 4, padT = 10, padB = 18;
-  const innerH = Math.max(180,
-    Math.max(incSources.length, expItems.length + 1) * 28 + 60
+  // ── Scale node heights to fill a fixed canvas ────────────────────
+  const CANVAS_H = Math.max(
+    incSrc.length*(MIN_H+GAP)+40,
+    rightItems.length*(MIN_H+GAP)+40,
+    220
   );
-  const H = innerH + padT + padB;
+  const VH = CANVAS_H + 60; // extra for top/bottom labels
 
-  // Column x positions
-  const col0x = padL;                             // income source nodes
-  const col1x = padL + colW + 20;                 // total income node
-  const col2x = W - padR - colW - 20;             // expense/savings nodes
+  const PAD_T = 30;
 
-  // ── Place nodes ─────────────────────────────────────────────────
-  function placeNodes(items, colX, totalH) {
-    const totalVal = items.reduce((s,x)=>s+x.val,0);
-    const usableH = totalH - (items.length-1)*nodeGap;
-    let y = 0;
-    return items.map(x => {
-      const h = totalVal > 0 ? Math.max(8, (x.val/totalVal)*usableH) : 20;
-      const node = {...x, x:colX, y, h};
-      y += h + nodeGap;
-      return node;
+  function scaleNodes(items, availH) {
+    const tot = items.reduce((s,x)=>s+x.val,0)||1;
+    const totalGap = (items.length-1)*GAP;
+    const barSpace = availH - totalGap;
+    let y = PAD_T;
+    return items.map(x=>{
+      const h = Math.max(MIN_H, (x.val/tot)*barSpace);
+      const n = {...x, y, h};
+      y += h+GAP;
+      return n;
     });
   }
 
-  // Centre nodes vertically within H
-  function centreNodes(nodes) {
-    const total = nodes.reduce((s,n)=>s+n.h+nodeGap,0) - nodeGap;
-    const offset = (innerH - total)/2;
-    return nodes.map(n=>({...n, y:n.y+offset+padT}));
+  // ── Centre nodes vertically ──────────────────────────────────────
+  function centreV(nodes, targetCY) {
+    const used = nodes.reduce((s,n)=>s+n.h+GAP,0)-GAP;
+    const offset = targetCY - used/2 - PAD_T;
+    return nodes.map(n=>({...n,y:n.y+offset}));
   }
 
-  // Income source nodes (left column) — scaled to ytdInc
-  const incTotalVal = incSources.reduce((s,x)=>s+x.val,0)||1;
-  const incNodes = centreNodes(placeNodes(incSources.map(x=>({...x,val:x.val})), col0x, innerH));
+  const midCY = VH/2;
+  const incNodes   = centreV(scaleNodes(incSrc, CANVAS_H), midCY);
+  const rightNodes = centreV(scaleNodes(rightItems, CANVAS_H), midCY);
 
-  // Total Income node (middle) — single tall bar
-  const midH = Math.max(40, innerH * 0.7);
-  const midNode = { label:'Total Income', val:ytdInc, col:'#4caf50', x:col1x, y:padT+(innerH-midH)/2, h:midH };
+  // Mid node spans full height of whichever side is taller
+  const incTop  = incNodes[0]?.y   ?? midCY-40;
+  const incBot  = (incNodes[incNodes.length-1]?.y??midCY) + (incNodes[incNodes.length-1]?.h??0);
+  const rTop    = rightNodes[0]?.y  ?? midCY-40;
+  const rBot    = (rightNodes[rightNodes.length-1]?.y??midCY) + (rightNodes[rightNodes.length-1]?.h??0);
+  const midTop  = Math.min(incTop, rTop);
+  const midBot  = Math.max(incBot, rBot);
+  const midH    = Math.max(40, midBot - midTop);
+  const midNode = {label:'Total Income', val:ytdInc, col:'#4caf50', x:COL1_X, y:midTop, h:midH};
 
-  // Expense nodes + Net Savings (right column)
-  const savings = ytdPl > 0 ? [{k:'savings', label:'Net Savings', col:'#c9a84c', val:ytdPl}] : [];
-  const rightItems = [...expItems, ...savings];
-  const rightNodes = centreNodes(placeNodes(rightItems, col2x, innerH));
-
-  // ── SVG ─────────────────────────────────────────────────────────
-  let paths = '', nodes = '', labels = '';
-
-  // Helper: cubic bezier ribbon between two nodes
-  function ribbon(x0, y0, h0, x1, y1, h1, col, opacity=0.35) {
+  // ── Ribbon helper ────────────────────────────────────────────────
+  function ribbon(x0,y0,h0, x1,y1,h1, col) {
     const mx = (x0+x1)/2;
-    return `<path d="
-      M${(x0+nodeW).toFixed(1)},${y0.toFixed(1)}
-      C${mx.toFixed(1)},${y0.toFixed(1)} ${mx.toFixed(1)},${y1.toFixed(1)} ${(x1).toFixed(1)},${y1.toFixed(1)}
-      L${(x1).toFixed(1)},${(y1+h1).toFixed(1)}
-      C${mx.toFixed(1)},${(y1+h1).toFixed(1)} ${mx.toFixed(1)},${(y0+h0).toFixed(1)} ${(x0+nodeW).toFixed(1)},${(y0+h0).toFixed(1)}
-      Z" fill="${col}" opacity="${opacity}"/>`;
+    const p = `M${x0},${y0} C${mx},${y0} ${mx},${y1} ${x1},${y1}
+               L${x1},${y1+h1} C${mx},${y1+h1} ${mx},${y0+h0} ${x0},${y0+h0} Z`;
+    return `<path d="${p}" fill="${col}" opacity="0.28"/>`;
   }
 
-  // Left→Middle ribbons: each income source → total income
-  // Distribute the mid node height proportionally
-  let midY = midNode.y;
+  let paths='', nodeSVG='', labelSVG='';
+
+  // Left → Centre ribbons
+  let mY = midNode.y;
   const incTot = incNodes.reduce((s,n)=>s+n.val,0)||1;
-  incNodes.forEach(n => {
-    const sliceH = (n.val/incTot) * midNode.h;
-    paths += ribbon(n.x, n.y, n.h, midNode.x, midY, sliceH, n.col, 0.30);
-    midY += sliceH;
+  incNodes.forEach(n=>{
+    const sh = Math.max(1,(n.val/incTot)*midNode.h);
+    paths += ribbon(COL0_X+NODE_W, n.y, n.h, COL1_X, mY, sh, n.col);
+    mY += sh;
   });
 
-  // Middle→Right ribbons: total income → expenses + savings
-  let midY2 = midNode.y;
-  const rightTot = rightNodes.reduce((s,n)=>s+n.val,0)||1;
-  rightNodes.forEach(n => {
-    const sliceH = Math.max(1, (n.val/rightTot) * midNode.h);
-    paths += ribbon(midNode.x, midY2, sliceH, n.x, n.y, n.h, n.col, 0.30);
-    midY2 += sliceH;
+  // Centre → Right ribbons
+  let mY2 = midNode.y;
+  const rTot = rightNodes.reduce((s,n)=>s+n.val,0)||1;
+  rightNodes.forEach(n=>{
+    const sh = Math.max(1,(n.val/rTot)*midNode.h);
+    paths += ribbon(COL1_X+NODE_W, mY2, sh, COL2_X, n.y, n.h, n.col);
+    mY2 += sh;
   });
 
-  // Draw nodes
-  function drawNode(n, side) {
-    // bar
-    nodes += `<rect x="${n.x.toFixed(1)}" y="${n.y.toFixed(1)}" width="${nodeW}" height="${n.h.toFixed(1)}"
-      fill="${n.col}" rx="3"/>`;
-    // label
-    const lx = side==='left'  ? n.x - 4 : n.x + nodeW + 4;
-    const anchor = side==='left' ? 'end' : 'start';
-    const ly = n.y + n.h/2;
-    labels += `<text x="${lx.toFixed(1)}" y="${(ly-5).toFixed(1)}" text-anchor="${anchor}"
-      font-size="7.5" font-weight="600" fill="${n.col}" font-family="DM Sans,sans-serif">${n.label}</text>
-    <text x="${lx.toFixed(1)}" y="${(ly+6).toFixed(1)}" text-anchor="${anchor}"
-      font-size="7" fill="var(--text,#333)" font-family="DM Sans,sans-serif">${fmtV(n.val)}</text>`;
+  // Draw a node bar
+  function bar(x,y,h,col){
+    nodeSVG += `<rect x="${x}" y="${y.toFixed(1)}" width="${NODE_W}" height="${h.toFixed(1)}" fill="${col}" rx="4"/>`;
   }
 
-  incNodes.forEach(n => drawNode(n,'left'));
-  rightNodes.forEach(n => drawNode(n,'right'));
+  // Left labels (right-aligned, ending at node bar)
+  incNodes.forEach(n=>{
+    bar(COL0_X, n.y, n.h, n.col);
+    const ly = n.y + n.h/2;
+    labelSVG += `
+      <text x="${COL0_X-8}" y="${(ly-5).toFixed(1)}" text-anchor="end"
+        font-size="9" font-weight="700" fill="${n.col}" font-family="DM Sans,sans-serif">${n.label}</text>
+      <text x="${COL0_X-8}" y="${(ly+7).toFixed(1)}" text-anchor="end"
+        font-size="8.5" fill="#555" font-family="DM Sans,sans-serif">${fmtV(n.val)}</text>`;
+  });
 
-  // Middle node
-  nodes += `<rect x="${midNode.x.toFixed(1)}" y="${midNode.y.toFixed(1)}" width="${nodeW}" height="${midNode.h.toFixed(1)}"
-    fill="${midNode.col}" rx="3"/>`;
-  labels += `<text x="${(midNode.x+nodeW/2).toFixed(1)}" y="${(midNode.y-6).toFixed(1)}"
-    text-anchor="middle" font-size="7.5" font-weight="700" fill="${midNode.col}"
-    font-family="DM Sans,sans-serif">Total Income</text>
-  <text x="${(midNode.x+nodeW/2).toFixed(1)}" y="${(midNode.y+midNode.h+12).toFixed(1)}"
-    text-anchor="middle" font-size="7" fill="var(--text,#333)"
-    font-family="DM Sans,sans-serif">${fmtV(ytdInc)}</text>`;
+  // Right labels (left-aligned, starting from node bar right edge)
+  rightNodes.forEach(n=>{
+    bar(COL2_X, n.y, n.h, n.col);
+    const ly = n.y + n.h/2;
+    // colour dot
+    labelSVG += `
+      <circle cx="${COL2_X+NODE_W+10}" cy="${(ly-3).toFixed(1)}" r="5" fill="${n.col}"/>
+      <text x="${COL2_X+NODE_W+20}" y="${(ly-8).toFixed(1)}"
+        font-size="9" font-weight="700" fill="${n.col}" font-family="DM Sans,sans-serif">${n.label}</text>
+      <text x="${COL2_X+NODE_W+20}" y="${(ly+5).toFixed(1)}"
+        font-size="8.5" fill="#555" font-family="DM Sans,sans-serif">${fmtV(n.val)}</text>`;
+  });
+
+  // Centre node + labels above/below
+  bar(COL1_X, midNode.y, midNode.h, midNode.col);
+  labelSVG += `
+    <text x="${COL1_X+NODE_W/2}" y="${(midNode.y-10).toFixed(1)}" text-anchor="middle"
+      font-size="10" font-weight="700" fill="${midNode.col}" font-family="DM Sans,sans-serif">Total Income</text>
+    <text x="${COL1_X+NODE_W/2}" y="${(midNode.y+midNode.h+16).toFixed(1)}" text-anchor="middle"
+      font-size="9" fill="#555" font-family="DM Sans,sans-serif">${fmtV(ytdInc)}</text>`;
 
   wrap.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}"
-      style="display:block;overflow:visible;">
-      ${paths}${nodes}${labels}
-    </svg>`;
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <svg viewBox="0 0 ${VW} ${VH}" width="${VW}" height="${VH}"
+        style="display:block;min-width:${VW}px;">
+        ${paths}${nodeSVG}${labelSVG}
+      </svg>
+    </div>`;
 }
 
 
@@ -1647,26 +1650,176 @@ function renderIncomeBoxes(incBreak) {
 }
 
 function drawPnlChart() {
-  const labels=[], incData=[], expData=[], plData=[];
+  const wrap = document.getElementById('pnl-glow-chart');
+  if (!wrap) return;
+
+  const months=[], incData=[], expData=[], plData=[];
   MSHORT.forEach((m,i) => {
     const a = getMonthAgg(i);
     if (!a.income && !a.expense) return;
-    labels.push(m); incData.push(a.income); expData.push(a.expense); plData.push(a.pl);
+    months.push(m); incData.push(a.income); expData.push(a.expense); plData.push(a.pl);
   });
-  destroyChart('cPnl');
-  if (!labels.length) { document.getElementById('cPnl').style.display='none'; return; }
-  document.getElementById('cPnl').style.display='';
-  new Chart(document.getElementById('cPnl'), {
-    type:'bar',
-    data:{ labels, datasets:[
-      {label:'Income', data:incData, backgroundColor:'rgba(201,168,76,.7)', borderRadius:4},
-      {label:'Expense', data:expData, backgroundColor:'rgba(224,85,85,.6)', borderRadius:4},
-      {label:'Profit', data:plData, type:'line', borderColor:'#52b788', backgroundColor:'rgba(82,183,136,.1)', fill:false, tension:.4, pointRadius:4, pointBackgroundColor:'#52b788', borderWidth:2}
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}},
-      scales:{y:{ticks:{callback:v=>'₹'+(v/1000).toFixed(0)+'K'}}}}
+
+  if (!months.length) { wrap.innerHTML='<div class="empty" style="color:#555;padding:40px 0;text-align:center;">No data yet</div>'; return; }
+
+  const fmtV = v => v>=1e5?(v/1e5).toFixed(1)+'L':v>=1e3?(v/1e3).toFixed(0)+'K':'₹'+Math.round(v);
+
+  // ── Layout ────────────────────────────────────────
+  const N    = months.length;
+  const VW   = 320, PAD_L=38, PAD_R=14, PAD_T=24, PAD_B=36;
+  const chartW = VW - PAD_L - PAD_R;
+  const chartH = 180;
+  const VH   = chartH + PAD_T + PAD_B;
+
+  const barW   = Math.min(28, (chartW/N)*0.55);
+  const barGap = chartW / N;
+
+  const allVals = [...incData,...expData,...plData.map(v=>Math.abs(v))];
+  const maxV    = Math.max(...allVals, 1);
+  const minV    = Math.min(...plData, 0);
+  const range   = maxV - minV || 1;
+
+  const toY = v => PAD_T + chartH - ((v - minV) / range) * chartH;
+  const barX = i => PAD_L + i * barGap + barGap/2;
+
+  // ── Grid lines ────────────────────────────────────
+  let grid = '';
+  const ticks = 4;
+  for (let t=0; t<=ticks; t++) {
+    const v   = minV + (range/ticks)*t;
+    const y   = toY(v);
+    const lbl = fmtV(v);
+    grid += `<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${VW-PAD_R}" y2="${y.toFixed(1)}"
+      stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+    <text x="${PAD_L-4}" y="${(y+4).toFixed(1)}" text-anchor="end"
+      font-size="7" fill="rgba(255,255,255,0.3)" font-family="DM Sans,sans-serif">${lbl}</text>`;
+  }
+  // Zero line
+  if (minV < 0) {
+    const zy = toY(0);
+    grid += `<line x1="${PAD_L}" y1="${zy.toFixed(1)}" x2="${VW-PAD_R}" y2="${zy.toFixed(1)}"
+      stroke="rgba(255,255,255,0.18)" stroke-width="0.8" stroke-dasharray="3,3"/>`;
+  }
+
+  // ── Bars ──────────────────────────────────────────
+  let bars = '';
+  months.forEach((_,i) => {
+    const cx   = barX(i);
+    const incY = toY(incData[i]), incH = Math.max(2, toY(0)-incY);
+    const expY = toY(expData[i]), expH = Math.max(2, toY(0)-expY);
+    const isProfit = plData[i] >= 0;
+
+    // Income bar — golden glass
+    bars += `
+      <defs>
+        <linearGradient id="gInc${i}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ffd54f" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#c9a84c" stop-opacity="0.4"/>
+        </linearGradient>
+        <linearGradient id="gExp${i}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ef5350" stop-opacity="0.85"/>
+          <stop offset="100%" stop-color="#b71c1c" stop-opacity="0.35"/>
+        </linearGradient>
+        <filter id="glow${i}">
+          <feGaussianBlur stdDeviation="2.5" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <!-- Income bar -->
+      <rect x="${(cx - barW - 1).toFixed(1)}" y="${incY.toFixed(1)}"
+        width="${barW}" height="${incH.toFixed(1)}"
+        fill="url(#gInc${i})" rx="3" filter="url(#glow${i})"/>
+      <!-- glass sheen on income bar -->
+      <rect x="${(cx - barW - 1).toFixed(1)}" y="${incY.toFixed(1)}"
+        width="${(barW*0.35).toFixed(1)}" height="${incH.toFixed(1)}"
+        fill="rgba(255,255,255,0.12)" rx="3"/>
+      <!-- Expense bar -->
+      <rect x="${(cx+1).toFixed(1)}" y="${expY.toFixed(1)}"
+        width="${barW}" height="${expH.toFixed(1)}"
+        fill="url(#gExp${i})" rx="3" filter="url(#glow${i})"/>
+      <!-- glass sheen on expense bar -->
+      <rect x="${(cx+1).toFixed(1)}" y="${expY.toFixed(1)}"
+        width="${(barW*0.35).toFixed(1)}" height="${expH.toFixed(1)}"
+        fill="rgba(255,255,255,0.10)" rx="3"/>`;
+
+    // Month label
+    bars += `<text x="${cx.toFixed(1)}" y="${(VH-6).toFixed(1)}"
+      text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.45)"
+      font-family="DM Sans,sans-serif">${months[i]}</text>`;
   });
+
+  // ── P&L glow line ─────────────────────────────────
+  const pts = months.map((_,i) => `${barX(i).toFixed(1)},${toY(plData[i]).toFixed(1)}`).join(' ');
+  // Smooth polyline via cubic bezier
+  const lineD = months.map((_,i) => {
+    const x=barX(i), y=toY(plData[i]);
+    if (i===0) return `M${x.toFixed(1)},${y.toFixed(1)}`;
+    const px=barX(i-1), py=toY(plData[i-1]);
+    const cpx=(px+x)/2;
+    return `C${cpx.toFixed(1)},${py.toFixed(1)} ${cpx.toFixed(1)},${y.toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  // Arrow at the end of line
+  const lastX = barX(N-1), lastY = toY(plData[N-1]);
+  const prevX = N>1?barX(N-2):lastX-20, prevY=N>1?toY(plData[N-2]):lastY;
+  const ang   = Math.atan2(lastY-prevY, lastX-prevX);
+  const aLen  = 9, aWid = 5;
+  const arrowPts = [
+    `${(lastX + aLen*Math.cos(ang)).toFixed(1)},${(lastY + aLen*Math.sin(ang)).toFixed(1)}`,
+    `${(lastX + aWid*Math.cos(ang+Math.PI*0.7)).toFixed(1)},${(lastY + aWid*Math.sin(ang+Math.PI*0.7)).toFixed(1)}`,
+    `${(lastX + aWid*Math.cos(ang-Math.PI*0.7)).toFixed(1)},${(lastY + aWid*Math.sin(ang-Math.PI*0.7)).toFixed(1)}`
+  ].join(' ');
+
+  const glowLine = `
+    <defs>
+      <filter id="lineGlow">
+        <feGaussianBlur stdDeviation="3" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#52b788"/>
+        <stop offset="100%" stop-color="#80ffb4"/>
+      </linearGradient>
+    </defs>
+    <!-- Glow halo -->
+    <path d="${lineD}" fill="none" stroke="#52b788" stroke-width="6" opacity="0.18"/>
+    <!-- Main line -->
+    <path d="${lineD}" fill="none" stroke="url(#lineGrad)" stroke-width="2.5"
+      stroke-linecap="round" filter="url(#lineGlow)"/>
+    <!-- Data points -->
+    ${months.map((_,i)=>{
+      const x=barX(i), y=toY(plData[i]);
+      const col = plData[i]>=0?'#80ffb4':'#ff6b6b';
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${col}" filter="url(#lineGlow)"/>
+              <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="#fff"/>`;
+    }).join('')}
+    <!-- Arrow -->
+    <polygon points="${arrowPts}" fill="#80ffb4" filter="url(#lineGlow)"/>`;
+
+  // ── Legend ────────────────────────────────────────
+  const legend = `
+    <g transform="translate(${PAD_L},${PAD_T-12})">
+      <rect x="0" y="0" width="8" height="8" fill="#c9a84c" rx="2"/>
+      <text x="11" y="7.5" font-size="8" fill="rgba(255,255,255,0.6)" font-family="DM Sans,sans-serif">Income</text>
+      <rect x="52" y="0" width="8" height="8" fill="#ef5350" rx="2"/>
+      <text x="63" y="7.5" font-size="8" fill="rgba(255,255,255,0.6)" font-family="DM Sans,sans-serif">Expense</text>
+      <line x1="115" y1="4" x2="129" y2="4" stroke="#52b788" stroke-width="2"/>
+      <circle cx="122" cy="4" r="2.5" fill="#80ffb4"/>
+      <text x="132" y="7.5" font-size="8" fill="rgba(255,255,255,0.6)" font-family="DM Sans,sans-serif">P&amp;L</text>
+    </g>`;
+
+  wrap.innerHTML = `
+    <svg viewBox="0 0 ${VW} ${VH}" width="100%" height="${VH}"
+      style="display:block;">
+      <!-- Background grid -->
+      ${grid}
+      <!-- Bars -->
+      ${bars}
+      <!-- Glow line + arrow -->
+      ${glowLine}
+      <!-- Legend -->
+      ${legend}
+    </svg>`;
 }
 
 function drawAssetTrendChart() {
