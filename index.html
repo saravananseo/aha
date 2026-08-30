@@ -738,7 +738,7 @@ tr:hover td{background:var(--gold-dim);}
     <!-- ═══ INVEST ═══ -->
     <div class="tab" id="tab-invest">
       <div class="sec">Fixed Deposits</div>
-      <div class="kg c3" id="fd-kpis"></div>
+      <div id="fd-kpis"></div>
       <div class="card" style="padding:0;overflow:hidden;">
         <div class="tw"><table>
           <thead><tr><th>Date</th><th class="num">Capital</th><th class="num">₹/mo</th><th>Interest Received</th><th></th></tr></thead>
@@ -2268,11 +2268,68 @@ function renderInvest() {
       if (marks[key]) totalReceivedThisYear += (fd.monthly||0);
     });
   });
+  // Monthly interest: only active FDs contribute ongoing interest
+  const totalMoActive = activeFD.reduce((s,f) => s + (f.monthly||0), 0);
+  // Received this year: only mark payments from active FDs count as ongoing
+  let activeReceivedThisYear = 0;
+  activeFD.forEach(fd => {
+    const marks = fd.marks || {};
+    MSHORT.forEach((_,i) => {
+      const key = `${currentYear}-m${i}`;
+      if (marks[key]) activeReceivedThisYear += (fd.monthly||0);
+    });
+  });
+
+  const isDarkFD = document.documentElement.getAttribute('data-theme') !== 'light';
+  const fdBg  = isDarkFD
+    ? 'linear-gradient(135deg,#0a1628 0%,#0d2137 60%,#0a1628 100%)'
+    : 'linear-gradient(135deg,#1a6fc4 0%,#0d5fa3 55%,#0a4d8c 100%)';
+  const fdDc1 = isDarkFD ? 'rgba(26,111,196,0.50)'  : 'rgba(255,255,255,0.20)';
+  const fdDc2 = isDarkFD ? 'rgba(201,168,76,0.40)'  : 'rgba(255,220,80,0.40)';
+  const fdDc3 = isDarkFD ? 'rgba(13,127,110,0.35)'  : 'rgba(255,255,255,0.12)';
+
   document.getElementById('fd-kpis').innerHTML = `
-    <div class="kpi"><div class="kl">Active FDs</div><div class="kv sm">${activeFD.length}</div></div>
-    <div class="kpi"><div class="kl">Closed FDs</div><div class="kv sm" style="color:var(--muted);">${closedFD.length}</div></div>
-    <div class="kpi"><div class="kl">Total Capital</div><div class="kv sm">${fmtK(totalCap)}</div></div>
-    <div class="kpi"><div class="kl">Received ${currentYear}</div><div class="kv g sm">${fmtK(totalReceivedThisYear)}</div></div>`;
+    <div style="position:relative;border-radius:20px;overflow:hidden;
+      background:${fdBg};padding:20px 18px 16px;margin-bottom:10px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.28);">
+      <div style="position:absolute;top:-26px;right:-26px;width:86px;height:86px;
+        border-radius:50%;background:${fdDc1};pointer-events:none;"></div>
+      <div style="position:absolute;top:-8px;right:38px;width:56px;height:56px;
+        border-radius:50%;background:${fdDc2};pointer-events:none;"></div>
+      <div style="position:absolute;bottom:-22px;left:-18px;width:76px;height:76px;
+        border-radius:50%;background:${fdDc3};pointer-events:none;"></div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <span style="font-size:20px;">🏦</span>
+        <div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.6);letter-spacing:0.8px;
+            text-transform:uppercase;font-weight:500;">Fixed Deposits</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);">
+            ${activeFD.length} active · ${closedFD.length} closed
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:rgba(255,255,255,0.55);margin-bottom:2px;">Active Capital</div>
+      <div style="font-size:30px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;
+        line-height:1.1;margin-bottom:14px;">${fmtK(totalCap)}</div>
+
+      <div style="height:1px;background:rgba(255,255,255,0.12);margin-bottom:14px;"></div>
+
+      <div style="display:flex;align-items:center;">
+        <div style="flex:1;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:2px;">Interest / Month</div>
+          <div style="font-size:16px;font-weight:800;color:#a7f3d0;">${fmtK(totalMoActive)}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px;">active FDs only</div>
+        </div>
+        <div style="width:1px;height:44px;background:rgba(255,255,255,0.15);margin:0 10px;"></div>
+        <div style="flex:1;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:2px;">Received ${currentYear}</div>
+          <div style="font-size:16px;font-weight:800;color:#fcd34d;">${fmtK(activeReceivedThisYear)}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px;">marked payments</div>
+        </div>
+      </div>
+    </div>`;
 
   // FD table
   const fdBody = document.getElementById('fd-body');
@@ -2306,8 +2363,7 @@ function renderInvest() {
       </tr>`;
     }).join('');
   }
-  const totalMo = sortedFD.reduce((s,f) => s + (f.monthly||0), 0);
-  document.getElementById('fd-total').innerHTML = `<td>Total</td><td class="num">₹${totalCap.toLocaleString('en-IN')}</td><td class="num">₹${totalMo.toLocaleString('en-IN')}/mo</td><td colspan="2"></td>`;
+  document.getElementById('fd-total').innerHTML = `<td>Total (Active)</td><td class="num">₹${totalCap.toLocaleString('en-IN')}</td><td class="num">₹${totalMoActive.toLocaleString('en-IN')}/mo</td><td colspan="2"></td>`;
 
   // Gold Loan KPIs — active capital + interest earned (closed) + accrued (active)
   const activeGL = D.gl.filter(g => g.status !== 'Closed');
