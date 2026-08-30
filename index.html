@@ -749,7 +749,7 @@ tr:hover td{background:var(--gold-dim);}
       <button class="btn btn-gold" style="margin-bottom:16px;" onclick="openModal('fdModal')">+ Add Fixed Deposit</button>
 
       <div class="sec">Gold Loans</div>
-      <div class="kg c2" id="gl-kpis" style="grid-template-columns:1fr 1fr;"></div>
+      <div id="gl-kpis"></div>
       <div style="position:relative;margin-bottom:10px;">
         <input type="text" id="gl-search" placeholder="🔍  Search by loan number…"
           oninput="renderInvest()"
@@ -936,6 +936,18 @@ tr:hover td{background:var(--gold-dim);}
   <div class="frow"><label>Notes</label><input type="text" id="fd-notes" placeholder="Optional"></div>
   <button class="btn btn-gold" onclick="saveFD()">Add FD</button>
   <button class="btn btn-ghost" onclick="closeModal('fdModal')">Cancel</button>
+</div></div>
+
+<!-- ── Close FD ── -->
+<div class="overlay" id="closeFDModal">
+<div class="modal">
+  <div class="modal-head"><div class="modal-title">Close Fixed Deposit</div><button class="close-btn" onclick="closeModal('closeFDModal')">✕</button></div>
+  <input type="hidden" id="close-fd-id">
+  <div class="frow"><label>Maturity / Close Date</label><input type="date" id="close-fd-date"></div>
+  <div class="frow"><label>Final Amount Received (₹)</label><input type="number" id="close-fd-amount" placeholder="e.g. 550000"></div>
+  <div class="frow"><label>Notes</label><input type="text" id="close-fd-notes" placeholder="Optional"></div>
+  <button class="btn btn-gold" onclick="confirmCloseFD()">Close FD</button>
+  <button class="btn btn-ghost" onclick="closeModal('closeFDModal')">Cancel</button>
 </div></div>
 
 <!-- ── Add Gold Loan ── -->
@@ -2205,6 +2217,32 @@ async function toggleFDMark(id, monthKey) {
   await globalCol('fd').doc(id).update({ marks });
 }
 
+function openCloseFD(id) {
+  document.getElementById('close-fd-id').value = id;
+  document.getElementById('close-fd-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('close-fd-amount').value = '';
+  document.getElementById('close-fd-notes').value = '';
+  openModal('closeFDModal');
+}
+
+async function confirmCloseFD() {
+  const id        = document.getElementById('close-fd-id').value;
+  const closeDate = document.getElementById('close-fd-date').value;
+  const amount    = parseFloat(document.getElementById('close-fd-amount').value) || 0;
+  const notes     = document.getElementById('close-fd-notes').value.trim();
+  if (!closeDate) { toast('Please select a close date'); return; }
+  try {
+    await globalCol('fd').doc(id).update({
+      status: 'Closed',
+      closeDate: closeDate,
+      finalAmount: amount || null,
+      closeNotes: notes || null
+    });
+    closeModal('closeFDModal');
+    toast('FD closed ✓');
+  } catch(e) { toast('Error: ' + e.message); }
+}
+
 async function deleteFD(id) {
   if (!confirm('Delete this FD?')) return;
   await globalCol('fd').doc(id).delete();
@@ -2219,7 +2257,9 @@ function renderInvest() {
   });
 
   // FD KPIs — total capital + interest received this year (marked months)
-  const totalCap = sortedFD.reduce((s,f) => s + (f.capital||0), 0);
+  const activeFD = sortedFD.filter(f => f.status !== 'Closed');
+  const closedFD = sortedFD.filter(f => f.status === 'Closed');
+  const totalCap = activeFD.reduce((s,f) => s + (f.capital||0), 0);
   let totalReceivedThisYear = 0;
   sortedFD.forEach(fd => {
     const marks = fd.marks || {};
@@ -2229,7 +2269,8 @@ function renderInvest() {
     });
   });
   document.getElementById('fd-kpis').innerHTML = `
-    <div class="kpi"><div class="kl">No. of FDs</div><div class="kv sm">${sortedFD.length}</div></div>
+    <div class="kpi"><div class="kl">Active FDs</div><div class="kv sm">${activeFD.length}</div></div>
+    <div class="kpi"><div class="kl">Closed FDs</div><div class="kv sm" style="color:var(--muted);">${closedFD.length}</div></div>
     <div class="kpi"><div class="kl">Total Capital</div><div class="kv sm">${fmtK(totalCap)}</div></div>
     <div class="kpi"><div class="kl">Received ${currentYear}</div><div class="kv g sm">${fmtK(totalReceivedThisYear)}</div></div>`;
 
@@ -2243,12 +2284,25 @@ function renderInvest() {
         const done = (fd.marks||{})[key];
         return `<span class="mk ${done?'done':''}" onclick="toggleFDMark('${fd.id}','${key}')" title="${m} ${currentYear}">${m[0]}</span>`;
       }).join('');
-      return `<tr>
-        <td style="font-size:11px;">${fmtDate(fd.date)}<br><span style="color:var(--muted);font-size:10px;">${fd.notes||''}</span></td>
+      const isClosed = fd.status === 'Closed';
+      const closedLabel = isClosed
+        ? `<span class="badge br" style="font-size:9px;margin-left:4px;">Closed ${fd.closeDate?fmtDate(fd.closeDate):''}</span>`
+        : `<span class="badge bo" style="font-size:9px;margin-left:4px;">Active</span>`;
+      const finalAmt = isClosed && fd.finalAmount
+        ? `<br><span style="font-size:9px;color:var(--muted);">Received: ₹${(fd.finalAmount).toLocaleString('en-IN')}</span>`
+        : '';
+      return `<tr style="opacity:${isClosed?'0.6':'1'}">
+        <td style="font-size:11px;">${fmtDate(fd.date)}${closedLabel}<br>
+          <span style="color:var(--muted);font-size:10px;">${fd.notes||''}${fd.closeNotes?(' · '+fd.closeNotes):''}</span>
+          ${finalAmt}
+        </td>
         <td class="num">${(fd.capital||0).toLocaleString('en-IN')}</td>
         <td class="num pos">₹${(fd.monthly||0).toLocaleString('en-IN')}</td>
         <td><div class="marks">${marksHTML}</div></td>
-        <td><button class="icon-btn del" onclick="deleteFD('${fd.id}')">🗑</button></td>
+        <td style="white-space:nowrap;">
+          ${!isClosed ? `<button class="btn-sm" style="margin-bottom:4px;" onclick="openCloseFD('${fd.id}')">✓ Close</button><br>` : ''}
+          <button class="icon-btn del" onclick="deleteFD('${fd.id}')">🗑</button>
+        </td>
       </tr>`;
     }).join('');
   }
@@ -2265,13 +2319,62 @@ function renderInvest() {
     return s + calcGLMonths(g.date, today, g.capital, g.rate);
   }, 0);
 
-  document.getElementById('gl-kpis').style.gridTemplateColumns = '1fr 1fr';
+  const isDarkGL = document.documentElement.getAttribute('data-theme') !== 'light';
+  const glBg  = isDarkGL
+    ? 'linear-gradient(135deg,#1a120a 0%,#2a1800 60%,#1a1200 100%)'
+    : 'linear-gradient(135deg,#b45309 0%,#92400e 55%,#78350f 100%)';
+  const glDc1 = isDarkGL ? 'rgba(201,168,76,0.40)' : 'rgba(255,255,255,0.18)';
+  const glDc2 = isDarkGL ? 'rgba(180,83,9,0.45)'   : 'rgba(255,220,100,0.40)';
+  const glDc3 = isDarkGL ? 'rgba(120,53,15,0.40)'  : 'rgba(255,255,255,0.12)';
+  const totalInt = earnedInt + accruedInt;
+
   document.getElementById('gl-kpis').innerHTML = `
-    <div class="kpi"><div class="kl">Active Loans</div><div class="kv sm">${activeGL.length}</div></div>
-    <div class="kpi"><div class="kl">Active Capital</div><div class="kv sm">${fmtK(actCap)}</div></div>
-    <div class="kpi"><div class="kl">Interest Earned</div><div class="kv g sm">${fmtK(earnedInt)}</div></div>
-    <div class="kpi"><div class="kl">Accrued (Active)</div><div class="kv sm" style="color:var(--org);">${fmtK(accruedInt)}</div></div>`;
-  document.getElementById('gl-kpis').style.gridTemplateColumns = '1fr 1fr';
+    <div style="position:relative;border-radius:20px;overflow:hidden;
+      background:${glBg};padding:20px 18px 16px;margin-bottom:10px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.28);">
+      <!-- Decorative circles -->
+      <div style="position:absolute;top:-26px;right:-26px;width:86px;height:86px;
+        border-radius:50%;background:${glDc1};pointer-events:none;"></div>
+      <div style="position:absolute;top:-8px;right:38px;width:56px;height:56px;
+        border-radius:50%;background:${glDc2};pointer-events:none;"></div>
+      <div style="position:absolute;bottom:-22px;left:-18px;width:76px;height:76px;
+        border-radius:50%;background:${glDc3};pointer-events:none;"></div>
+
+      <!-- Header row: icon + title -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <span style="font-size:20px;">🏅</span>
+        <div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.6);letter-spacing:0.8px;
+            text-transform:uppercase;font-weight:500;">Gold Loan Summary</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);">
+            ${activeGL.length} active · ${closedGL.length} closed
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Capital — big value -->
+      <div style="font-size:11px;color:rgba(255,255,255,0.55);margin-bottom:2px;">Active Capital</div>
+      <div style="font-size:30px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;
+        line-height:1.1;margin-bottom:14px;">${fmtK(actCap)}</div>
+
+      <!-- Divider -->
+      <div style="height:1px;background:rgba(255,255,255,0.12);margin-bottom:14px;"></div>
+
+      <!-- Bottom row: Interest Earned | Accrued -->
+      <div style="display:flex;align-items:center;">
+        <div style="flex:1;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:2px;">Interest Earned</div>
+          <div style="font-size:16px;font-weight:800;color:#a7f3d0;">${fmtK(earnedInt)}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px;">from closed loans</div>
+        </div>
+        <div style="width:1px;height:44px;background:rgba(255,255,255,0.15);margin:0 10px;"></div>
+        <div style="flex:1;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:2px;">Accrued (Active)</div>
+          <div style="font-size:16px;font-weight:800;color:#fcd34d;">${fmtK(accruedInt)}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px;">running total</div>
+        </div>
+      </div>
+    </div>`;
 
   // Gold Loan cards — sort by date ascending, filter by loan number search
   const searchQuery = (document.getElementById('gl-search')?.value || '').trim().toLowerCase();
