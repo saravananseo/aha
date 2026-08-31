@@ -695,7 +695,7 @@ tr:hover td{background:var(--gold-dim);}
     <!-- ═══ DAILY ═══ -->
     <div class="tab" id="tab-daily">
       <div class="mtabs" id="daily-mtabs"></div>
-      <div class="kg c3" id="daily-summary" style="margin-bottom:12px;"></div>
+      <div id="daily-summary" style="margin-bottom:12px;"></div>
       <div class="card" style="padding:0;overflow:hidden;">
         <div style="padding:10px 14px 8px;display:flex;justify-content:space-between;align-items:center;">
           <div class="card-title" style="margin:0;" id="daily-card-title">Entries</div>
@@ -720,7 +720,7 @@ tr:hover td{background:var(--gold-dim);}
     <!-- ═══ PORTFOLIO ═══ -->
     <div class="tab" id="tab-portfolio">
       <div class="mtabs" id="port-mtabs"></div>
-      <div class="kg c3" id="port-kpis" style="margin-bottom:12px;"></div>
+      <div id="port-kpis" style="margin-bottom:12px;"></div>
       <div class="card">
         <div class="card-title">Asset Allocation</div>
         <div id="port-bar-chart" style="margin-top:4px;"></div>
@@ -1228,10 +1228,62 @@ function renderDailyTab() {
   const totExp  = entries.reduce((s,e) => s + (e.expense||0), 0);
   const totPl   = totInc - totExp;
 
+  const isDarkD = document.documentElement.getAttribute('data-theme') !== 'light';
+  const dBg  = isDarkD
+    ? 'linear-gradient(135deg,#0d2137 0%,#0a1628 60%,#0d2137 100%)'
+    : 'linear-gradient(135deg,#0d7f6e 0%,#0a5e52 60%,#1a6fc4 100%)';
+  const dDc1 = isDarkD?'rgba(26,111,196,0.55)':'rgba(255,255,255,0.22)';
+  const dDc2 = isDarkD?'rgba(201,168,76,0.50)':'rgba(255,210,80,0.55)';
+  const dDc3 = isDarkD?'rgba(13,127,110,0.45)':'rgba(255,255,255,0.18)';
+  const dBalCol = totPl>=0?'#a7f3d0':'#fca5a5';
+  const dSavPct = totInc>0?(totPl/totInc*100).toFixed(1):'0.0';
+
   document.getElementById('daily-summary').innerHTML = `
-    <div class="kpi"><div class="kl">Income</div><div class="kv">${fmt(totInc)}</div></div>
-    <div class="kpi"><div class="kl">Expense</div><div class="kv r">${fmt(totExp)}</div></div>
-    <div class="kpi"><div class="kl">Profit</div><div class="kv g">${fmt(totPl)}</div></div>`;
+    <div style="position:relative;border-radius:20px;overflow:hidden;
+      background:${dBg};padding:20px 18px 16px;margin-bottom:0;
+      box-shadow:0 8px 32px rgba(0,0,0,0.28);">
+      <div style="position:absolute;top:-26px;right:-26px;width:86px;height:86px;
+        border-radius:50%;background:${dDc1};pointer-events:none;"></div>
+      <div style="position:absolute;top:-8px;right:38px;width:56px;height:56px;
+        border-radius:50%;background:${dDc2};pointer-events:none;"></div>
+      <div style="position:absolute;bottom:-22px;left:-18px;width:76px;height:76px;
+        border-radius:50%;background:${dDc3};pointer-events:none;"></div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.6);letter-spacing:0.4px;margin-bottom:2px;">
+        ${MONTHS[dailyMonth]} ${currentYear} — Balance</div>
+      <div style="font-size:30px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;
+        line-height:1.1;margin-bottom:4px;">${fmt(totPl)}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:14px;">
+        Savings Rate &nbsp;<span style="color:${dBalCol};font-weight:700;">${dSavPct}%</span>&nbsp;of income
+      </div>
+      <div style="height:1px;background:rgba(255,255,255,0.12);margin-bottom:14px;"></div>
+      <div style="display:flex;align-items:center;">
+        <div style="flex:1;display:flex;align-items:center;gap:10px;">
+          <div style="width:34px;height:34px;border-radius:50%;background:rgba(167,243,208,0.18);
+            display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M12 19V5M5 12l7-7 7 7" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.5);">Income</div>
+            <div style="font-size:17px;font-weight:800;color:#a7f3d0;">${fmt(totInc)}</div>
+          </div>
+        </div>
+        <div style="width:1px;height:44px;background:rgba(255,255,255,0.15);margin:0 8px;"></div>
+        <div style="flex:1;display:flex;align-items:center;gap:10px;justify-content:flex-end;">
+          <div style="text-align:right;">
+            <div style="font-size:10px;color:rgba(255,255,255,0.5);">Expenses</div>
+            <div style="font-size:17px;font-weight:800;color:#fca5a5;">${fmt(totExp)}</div>
+          </div>
+          <div style="width:34px;height:34px;border-radius:50%;background:rgba(252,165,165,0.18);
+            display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M12 5v14M5 12l7 7 7-7" stroke="#fca5a5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>`;
 
   const titleEl = document.getElementById('daily-card-title');
   const dlBtn   = document.getElementById('daily-dl-btn');
@@ -1935,10 +1987,50 @@ function renderPortfolio() {
   const prevTotal  = prevData ? ASSET_KEYS.reduce((s,k)=>s+(prevData[k]||0),0) : 0;
   const growth     = prevTotal > 0 ? ((total-prevTotal)/prevTotal*100).toFixed(2) : null;
 
+  const isDarkP = document.documentElement.getAttribute('data-theme') !== 'light';
+  const pBg  = isDarkP
+    ? 'linear-gradient(135deg,#14110a 0%,#1c1600 60%,#14110a 100%)'
+    : 'linear-gradient(135deg,#b45309 0%,#92400e 55%,#78350f 100%)';
+  const pDc1 = isDarkP?'rgba(201,168,76,0.45)':'rgba(255,255,255,0.20)';
+  const pDc2 = isDarkP?'rgba(180,83,9,0.40)':'rgba(255,220,80,0.40)';
+  const pDc3 = isDarkP?'rgba(120,53,15,0.35)':'rgba(255,255,255,0.12)';
+  const growthCol = growth===null?'#fcd34d':growth>0?'#a7f3d0':'#fca5a5';
+  const growthIcon = growth===null?'—':growth>0?'↑':'↓';
+
   document.getElementById('port-kpis').innerHTML = `
-    <div class="kpi"><div class="kl">Total</div><div class="kv sm">${fmtCr(total)}</div></div>
-    <div class="kpi"><div class="kl">Prev Month</div><div class="kv sm">${fmtCr(prevTotal)}</div></div>
-    <div class="kpi"><div class="kl">Growth</div><div class="kv sm ${growth>0?'g':growth<0?'r':''}">${growth!=null?(growth>0?'+':'')+growth+'%':'—'}</div></div>`;
+    <div style="position:relative;border-radius:20px;overflow:hidden;
+      background:${pBg};padding:20px 18px 16px;margin-bottom:0;
+      box-shadow:0 8px 32px rgba(0,0,0,0.28);">
+      <div style="position:absolute;top:-26px;right:-26px;width:86px;height:86px;
+        border-radius:50%;background:${pDc1};pointer-events:none;"></div>
+      <div style="position:absolute;top:-8px;right:38px;width:56px;height:56px;
+        border-radius:50%;background:${pDc2};pointer-events:none;"></div>
+      <div style="position:absolute;bottom:-22px;left:-18px;width:76px;height:76px;
+        border-radius:50%;background:${pDc3};pointer-events:none;"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">📊</span>
+        <div style="font-size:11px;color:rgba(255,255,255,0.6);letter-spacing:0.8px;
+          text-transform:uppercase;font-weight:500;">${MONTHS[portMonth]} ${currentYear} — Portfolio</div>
+      </div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:2px;">Total Assets</div>
+      <div style="font-size:30px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;
+        line-height:1.1;margin-bottom:14px;">${fmtCr(total)}</div>
+      <div style="height:1px;background:rgba(255,255,255,0.12);margin-bottom:14px;"></div>
+      <div style="display:flex;align-items:center;">
+        <div style="flex:1;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:2px;">Prev Month</div>
+          <div style="font-size:16px;font-weight:800;color:#fcd34d;">${prevTotal>0?fmtCr(prevTotal):'—'}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px;">comparison base</div>
+        </div>
+        <div style="width:1px;height:44px;background:rgba(255,255,255,0.15);margin:0 10px;"></div>
+        <div style="flex:1;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:2px;">Month Growth</div>
+          <div style="font-size:16px;font-weight:800;color:${growthCol};">
+            ${growthIcon} ${growth!==null?(Math.abs(growth)+'%'):'—'}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px;">vs previous month</div>
+        </div>
+      </div>
+    </div>`;
 
   // Holdings — hexagon infographic
   renderHexGrid(portData, total);
