@@ -1,4 +1,4 @@
-const CACHE = 'aha-fb-v2';
+const CACHE = 'aha-fb-v3';
 const BASE  = '/aha/';
 const ASSETS = [
   BASE + 'index.html',
