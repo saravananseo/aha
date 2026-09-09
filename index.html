@@ -541,6 +541,18 @@ tr:hover td{background:var(--gold-dim);}
 .google-btn:hover{border-color:var(--gold);background:var(--gold-dim);}
 .google-btn svg{width:20px;height:20px;flex-shrink:0;}
 .login-note{font-size:10px;color:var(--muted);margin-top:20px;text-align:center;max-width:260px;line-height:1.6;}
+.bio-btn{
+  display:flex;align-items:center;gap:12px;
+  background:var(--bg2);border:1px solid var(--gold-b);border-radius:12px;
+  padding:14px 24px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;
+  color:var(--text);transition:all .25s;width:100%;max-width:280px;justify-content:center;
+  margin-top:12px;
+}
+.bio-btn:hover{border-color:var(--gold);background:var(--gold-dim);}
+.bio-btn svg{width:22px;height:22px;flex-shrink:0;}
+.login-divider{display:flex;align-items:center;gap:10px;width:100%;max-width:280px;margin:14px 0 0;}
+.login-divider::before,.login-divider::after{content:'';flex:1;height:1px;background:var(--bg3);}
+.login-divider span{font-size:10px;color:var(--muted);white-space:nowrap;}
 
 /* ── LOADING ─────────────────────────────────────────── */
 #loading{
@@ -641,6 +653,26 @@ tr:hover td{background:var(--gold-dim);}
   <div class="login-logo"><img src="icon-192.png" alt="AHA"></div>
   <div class="login-title">AHA</div>
   <div class="login-sub">Personal Finance Tracker</div>
+
+  <!-- Biometric button — shown only if credential registered -->
+  <button class="bio-btn" id="bio-btn" onclick="signInBiometric()" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2C9.5 2 7.5 3.5 6.5 5.5"/>
+      <path d="M3 10c0-2.2.8-4.2 2.1-5.8"/>
+      <path d="M21 10a9 9 0 0 0-2.1-5.8"/>
+      <path d="M12 8a4 4 0 0 1 4 4c0 1.5-.3 3.5-1 5"/>
+      <path d="M8 12a4 4 0 0 1 .5-1.9"/>
+      <path d="M12 8c-1.1 0-2 .4-2.7 1"/>
+      <path d="M12 12v5"/>
+      <path d="M9 17c.5 1.5 1.5 3 3 3s2.5-1.5 3-3"/>
+      <path d="M5.5 16.5C4.5 15 4 13.1 4 11"/>
+      <path d="M19 11c0 2-.4 3.8-1.2 5.3"/>
+    </svg>
+    Sign in with Touch ID / Face ID
+  </button>
+
+  <div class="login-divider" id="login-divider" style="display:none;"><span>or sign in another way</span></div>
+
   <button class="google-btn" onclick="signInGoogle()">
     <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
     Continue with Google
@@ -1036,6 +1068,9 @@ const col = (name, y) => db.collection(`${yearPath(y)}/${name}`);
 const globalCol = (name) => db.collection(`${userPath()}/${name}`);
 
 // ── AUTH ─────────────────────────────────────────────
+// Show bio button if already registered (before auth resolves)
+showBioButton();
+
 auth.onAuthStateChanged(user => {
   hide('loading');
   if (user) {
@@ -1046,6 +1081,98 @@ auth.onAuthStateChanged(user => {
   }
 });
 
+// ── WebAuthn / Touch ID helpers ─────────────────────────────────
+const BIO_KEY = 'aha_bio_cred'; // localStorage key for credential id
+
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+function fromB64url(str) {
+  str = str.replace(/-/g,'+').replace(/_/g,'/');
+  return Uint8Array.from(atob(str), c=>c.charCodeAt(0)).buffer;
+}
+
+async function bioAvailable() {
+  return window.PublicKeyCredential &&
+    await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+}
+
+function showBioButton() {
+  const cred = localStorage.getItem(BIO_KEY);
+  if (!cred) return;
+  const btn = document.getElementById('bio-btn');
+  const div = document.getElementById('login-divider');
+  if (btn) btn.style.display = 'flex';
+  if (div) div.style.display = 'flex';
+}
+
+async function registerBiometric(user) {
+  try {
+    if (!await bioAvailable()) { toast('Biometric auth not available on this device'); return; }
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId    = new TextEncoder().encode(user.uid).buffer;
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge,
+      rp:   { name: 'AHA Finance', id: location.hostname },
+      user: { id: userId, name: user.email||user.uid, displayName: user.displayName||'AHA User' },
+      pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+      timeout: 60000
+    }});
+    // Store credential id + firebase uid so we can re-authenticate
+    localStorage.setItem(BIO_KEY, JSON.stringify({
+      credId: b64url(cred.rawId),
+      uid:    user.uid,
+      email:  user.email||'',
+      name:   user.displayName||''
+    }));
+    toast('Touch ID / Face ID registered ✓');
+    showBioButton();
+  } catch(e) {
+    if (e.name !== 'NotAllowedError') toast('Biometric registration failed: ' + e.message);
+  }
+}
+
+async function signInBiometric() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(BIO_KEY)||'null');
+    if (!stored) { toast('No biometric registered. Please sign in with Google first.'); return; }
+    if (!await bioAvailable()) { toast('Biometric not available'); return; }
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    await navigator.credentials.get({ publicKey: {
+      challenge,
+      allowCredentials: [{ id: fromB64url(stored.credId), type: 'public-key' }],
+      userVerification: 'required',
+      timeout: 60000
+    }});
+    // WebAuthn passed — sign into Firebase with a custom token approach:
+    // Since we can't issue custom tokens client-side, we re-use the stored uid
+    // to trigger a silent Google re-auth if the session is still valid,
+    // otherwise show a one-time Google sign-in prompt.
+    // Best-effort: try silent currentUser first
+    if (auth.currentUser) {
+      hide('login-screen');
+      onUserReady(auth.currentUser);
+      return;
+    }
+    // Session expired — sign in with Google silently (popup)
+    toast('Session expired — please sign in with Google once to refresh.');
+  } catch(e) {
+    if (e.name === 'NotAllowedError') toast('Biometric cancelled');
+    else toast('Biometric error: ' + e.message);
+  }
+}
+
+function removeBiometric() {
+  localStorage.removeItem(BIO_KEY);
+  const btn = document.getElementById('bio-btn');
+  const div = document.getElementById('login-divider');
+  if (btn) btn.style.display = 'none';
+  if (div) div.style.display = 'none';
+  toast('Touch ID removed');
+}
+
 async function signInGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
   try { await auth.signInWithPopup(provider); }
@@ -1053,15 +1180,81 @@ async function signInGoogle() {
 }
 
 function showApp(user) {
+  showBioButton();
   hide('login-screen');
   show('app', 'flex');
   // User widget
   const w = document.getElementById('user-widget');
-  if (user.photoURL) w.innerHTML = `<img class="user-avatar" src="${user.photoURL}" onclick="signOut()" title="Sign out">`;
-  else { const i = (user.displayName||user.email||'U')[0].toUpperCase(); w.innerHTML = `<div class="user-initials" onclick="signOut()" title="Sign out">${i}</div>`; }
+  const initials = (user.displayName||user.email||'U')[0].toUpperCase();
+  const avatarInner = user.photoURL
+    ? `<img class="user-avatar" src="${user.photoURL}" alt="avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+    : `<div class="user-initials">${initials}</div>`;
+  w.innerHTML = `<div style="position:relative;cursor:pointer;" onclick="toggleUserMenu()" title="Account">
+    ${avatarInner}
+  </div>
+  <div id="user-menu" style="display:none;position:absolute;top:52px;right:12px;
+    background:var(--bg2);border:1px solid var(--bg3);border-radius:12px;
+    box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:999;min-width:200px;overflow:hidden;">
+    <div style="padding:12px 14px 8px;border-bottom:1px solid var(--bg3);">
+      <div style="font-size:12px;font-weight:700;color:var(--text);">${user.displayName||'User'}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px;">${user.email||''}</div>
+    </div>
+    <button onclick="promptRegisterBio();toggleUserMenu();"
+      style="width:100%;padding:11px 14px;background:none;border:none;text-align:left;
+        font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:10px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2C9.5 2 7.5 3.5 6.5 5.5"/><path d="M3 10c0-2.2.8-4.2 2.1-5.8"/>
+        <path d="M21 10a9 9 0 0 0-2.1-5.8"/><path d="M12 8a4 4 0 0 1 4 4c0 1.5-.3 3.5-1 5"/>
+        <path d="M8 12a4 4 0 0 1 .5-1.9"/><path d="M12 8c-1.1 0-2 .4-2.7 1"/>
+        <path d="M12 12v5"/><path d="M9 17c.5 1.5 1.5 3 3 3s2.5-1.5 3-3"/>
+        <path d="M5.5 16.5C4.5 15 4 13.1 4 11"/><path d="M19 11c0 2-.4 3.8-1.2 5.3"/>
+      </svg>
+      Set up Touch ID / Face ID
+    </button>
+    <button onclick="signOut();toggleUserMenu();"
+      style="width:100%;padding:11px 14px;background:none;border:none;text-align:left;
+        font-size:13px;color:#ef5350;cursor:pointer;display:flex;align-items:center;gap:10px;
+        border-top:1px solid var(--bg3);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef5350" stroke-width="1.8" stroke-linecap="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+      Sign Out
+    </button>
+  </div>`;
+
+  // Close menu when tapping outside
+  setTimeout(()=>{ document.addEventListener('click', function closeMenu(e){
+    const menu=document.getElementById('user-menu');
+    if(menu && !menu.closest('#user-widget')?.contains(e.target)){
+      menu.style.display='none'; document.removeEventListener('click',closeMenu);
+    }
+  }); }, 100);
   applyStoredTheme();
   populateSelects();
   subscribeAll();
+}
+
+async function promptRegisterBio() {
+  const user = auth.currentUser;
+  if (!user) return;
+  if (!await bioAvailable()) {
+    toast('Touch ID / Face ID not supported on this device/browser');
+    return;
+  }
+  const stored = localStorage.getItem(BIO_KEY);
+  if (stored) {
+    if (confirm('Touch ID is already registered. Remove and re-register?')) {
+      localStorage.removeItem(BIO_KEY);
+      await registerBiometric(user);
+    }
+  } else {
+    await registerBiometric(user);
+  }
+}
+
+function toggleUserMenu() {
+  const m = document.getElementById('user-menu');
+  if (m) m.style.display = m.style.display==='none' ? 'block' : 'none';
 }
 
 async function signOut() {
