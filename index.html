@@ -1067,6 +1067,9 @@ try {
 const auth = firebase.auth();
 const db   = firebase.firestore();
 
+// Keep Firebase session alive across app restarts (PWA)
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+
 // Enable Firestore offline persistence for faster loads
 db.enablePersistence({ synchronizeTabs: true }).catch(()=>{});
 
@@ -1196,11 +1199,14 @@ async function registerBiometric(user) {
       timeout: 60000
     }});
     // Store credential id + firebase uid so we can re-authenticate
+    // Store credential + user info for session restoration
     localStorage.setItem(BIO_KEY, JSON.stringify({
-      credId: b64url(cred.rawId),
-      uid:    user.uid,
-      email:  user.email||'',
-      name:   user.displayName||''
+      credId:  b64url(cred.rawId),
+      uid:     user.uid,
+      email:   user.email||'',
+      name:    user.displayName||'',
+      photo:   user.photoURL||'',
+      ts:      Date.now()
     }));
     toast('Touch ID / Face ID registered ✓');
     showBioButton();
@@ -1210,10 +1216,15 @@ async function registerBiometric(user) {
 }
 
 async function signInBiometric() {
+  const btn = document.getElementById('bio-btn');
   try {
     const stored = JSON.parse(localStorage.getItem(BIO_KEY)||'null');
     if (!stored) { toast('No biometric registered. Please sign in with Google first.'); return; }
-    if (!await bioAvailable()) { toast('Biometric not available'); return; }
+    if (!await bioAvailable()) { toast('Biometric not available on this device'); return; }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+
+    // Step 1: WebAuthn biometric challenge — proves physical presence
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     await navigator.credentials.get({ publicKey: {
       challenge,
@@ -1221,19 +1232,37 @@ async function signInBiometric() {
       userVerification: 'required',
       timeout: 60000
     }});
-    // WebAuthn passed — sign into Firebase with a custom token approach:
-    // Since we can't issue custom tokens client-side, we re-use the stored uid
-    // to trigger a silent Google re-auth if the session is still valid,
-    // otherwise show a one-time Google sign-in prompt.
-    // Best-effort: try silent currentUser first
-    if (auth.currentUser) {
+
+    // Step 2: Biometric passed. Try to restore Firebase session.
+    // Firebase LOCAL persistence means the session token survives PWA restarts.
+    // currentUser may be null briefly while Firebase rehydrates from IndexedDB.
+    // Wait up to 3 seconds for it to resolve.
+    const user = await new Promise((resolve) => {
+      if (auth.currentUser) { resolve(auth.currentUser); return; }
+      const unsub = auth.onAuthStateChanged(u => {
+        unsub();
+        resolve(u);
+      });
+      // Fallback timeout
+      setTimeout(() => resolve(auth.currentUser), 3000);
+    });
+
+    if (user) {
+      // Session alive — go straight in
       hide('login-screen');
-      onUserReady(auth.currentUser);
-      return;
+      activeUser = user;
+      renderUserWidget(user);
+      showApp(user);
+      toast('Welcome back, ' + (user.displayName||user.email) + ' 👋');
+    } else {
+      // Session truly expired (very rare with LOCAL persistence)
+      // Silently re-trigger Google sign-in
+      if (btn) { btn.disabled=false; btn.innerHTML = '🔑 Sign in with Touch ID / Face ID'; }
+      toast('Session expired — signing in with Google…');
+      setTimeout(() => signInGoogle(), 800);
     }
-    // Session expired — sign in with Google silently (popup)
-    toast('Session expired — please sign in with Google once to refresh.');
   } catch(e) {
+    if (btn) { btn.disabled=false; btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M12 2C9.5 2 7.5 3.5 6.5 5.5"/><path d="M3 10c0-2.2.8-4.2 2.1-5.8"/><path d="M21 10a9 9 0 0 0-2.1-5.8"/><path d="M12 8a4 4 0 0 1 4 4c0 1.5-.3 3.5-1 5"/><path d="M8 12a4 4 0 0 1 .5-1.9"/><path d="M12 8c-1.1 0-2 .4-2.7 1"/><path d="M12 12v5"/><path d="M9 17c.5 1.5 1.5 3 3 3s2.5-1.5 3-3"/><path d="M5.5 16.5C4.5 15 4 13.1 4 11"/><path d="M19 11c0 2-.4 3.8-1.2 5.3"/></svg> Sign in with Touch ID / Face ID`; }
     if (e.name === 'NotAllowedError') toast('Biometric cancelled');
     else toast('Biometric error: ' + e.message);
   }
