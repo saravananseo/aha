@@ -358,8 +358,10 @@ header{
 .yr-lbl{font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;color:var(--gold);min-width:40px;text-align:center;}
 
 /* User avatar */
-.user-avatar{width:30px;height:30px;border-radius:50%;cursor:pointer;border:1px solid var(--gold-b);object-fit:cover;}
+.user-avatar{width:30px;height:30px;border-radius:50%;cursor:pointer;border:1px solid var(--gold-b);object-fit:cover;display:block;}
 .user-initials{width:30px;height:30px;border-radius:50%;background:var(--gold-dim);border:1px solid var(--gold-b);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--gold);cursor:pointer;}
+#user-widget{min-width:30px;min-height:30px;position:relative;}
+#user-menu{position:fixed !important;z-index:9999;}
 
 /* ── NAV ─────────────────────────────────────────────── */
 nav{display:flex;background:var(--bg2);border-bottom:1px solid var(--gold-b);flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
@@ -1137,6 +1139,7 @@ auth.onAuthStateChanged(user => {
   hide('loading');
   if (user) {
     activeUser = user;
+    renderUserWidget(user);  // render immediately, before data loads
     showApp(user);
   } else {
     showBioButton();
@@ -1251,55 +1254,70 @@ async function signInGoogle() {
   catch(e) { toast('Sign-in failed: ' + e.message); }
 }
 
+function renderUserWidget(user) {
+  const w = document.getElementById('user-widget');
+  if (!w || !user) return;
+  const initials = (user.displayName||user.email||'U')[0].toUpperCase();
+  const avatarHTML = user.photoURL
+    ? `<img class="user-avatar" src="${user.photoURL}" alt="${initials}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+       <div class="user-initials" style="display:none;">${initials}</div>`
+    : `<div class="user-initials">${initials}</div>`;
+
+  w.innerHTML = `
+    <div onclick="toggleUserMenu()" title="Account menu"
+      style="width:30px;height:30px;cursor:pointer;border-radius:50%;overflow:hidden;
+             border:1.5px solid var(--gold-b);flex-shrink:0;">
+      ${avatarHTML}
+    </div>
+    <div id="user-menu" style="display:none;position:fixed;top:56px;right:12px;
+      background:var(--bg2);border:1px solid var(--bg3);border-radius:14px;
+      box-shadow:0 8px 28px rgba(0,0,0,.32);z-index:9999;min-width:210px;overflow:hidden;">
+      <div style="padding:12px 14px 10px;border-bottom:1px solid var(--bg3);">
+        <div style="font-size:13px;font-weight:700;color:var(--text);">${user.displayName||'User'}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">${user.email||''}</div>
+      </div>
+      <button onclick="promptRegisterBio();toggleUserMenu();"
+        style="width:100%;padding:12px 14px;background:none;border:none;text-align:left;
+          font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:10px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2C9.5 2 7.5 3.5 6.5 5.5"/><path d="M3 10c0-2.2.8-4.2 2.1-5.8"/>
+          <path d="M21 10a9 9 0 0 0-2.1-5.8"/><path d="M12 8a4 4 0 0 1 4 4c0 1.5-.3 3.5-1 5"/>
+          <path d="M8 12a4 4 0 0 1 .5-1.9"/><path d="M12 8c-1.1 0-2 .4-2.7 1"/>
+          <path d="M12 12v5"/><path d="M9 17c.5 1.5 1.5 3 3 3s2.5-1.5 3-3"/>
+          <path d="M5.5 16.5C4.5 15 4 13.1 4 11"/><path d="M19 11c0 2-.4 3.8-1.2 5.3"/>
+        </svg>
+        Set up Touch ID / Face ID
+      </button>
+      <button onclick="signOut();toggleUserMenu();"
+        style="width:100%;padding:12px 14px;background:none;border:none;text-align:left;
+          font-size:13px;color:#ef5350;cursor:pointer;display:flex;align-items:center;gap:10px;
+          border-top:1px solid var(--bg3);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef5350" stroke-width="1.8" stroke-linecap="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Sign Out
+      </button>
+    </div>`;
+
+  // Close menu on outside tap
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu(e) {
+      const menu = document.getElementById('user-menu');
+      const widget = document.getElementById('user-widget');
+      if (menu && widget && !widget.contains(e.target)) {
+        menu.style.display = 'none';
+        document.removeEventListener('click', closeMenu);
+      }
+    });
+  }, 100);
+}
+
 function showApp(user) {
   hide('login-screen');
   show('app', 'flex');
   // User widget
-  const w = document.getElementById('user-widget');
-  const initials = (user.displayName||user.email||'U')[0].toUpperCase();
-  const avatarInner = user.photoURL
-    ? `<img class="user-avatar" src="${user.photoURL}" alt="avatar">`
-    : `<div class="user-initials">${initials}</div>`;
-  w.innerHTML = `<div style="position:relative;cursor:pointer;width:30px;height:30px;" onclick="toggleUserMenu()" title="Account">
-    ${avatarInner}
-  </div>
-  <div id="user-menu" style="display:none;position:absolute;top:52px;right:12px;
-    background:var(--bg2);border:1px solid var(--bg3);border-radius:12px;
-    box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:999;min-width:200px;overflow:hidden;">
-    <div style="padding:12px 14px 8px;border-bottom:1px solid var(--bg3);">
-      <div style="font-size:12px;font-weight:700;color:var(--text);">${user.displayName||'User'}</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:2px;">${user.email||''}</div>
-    </div>
-    <button onclick="promptRegisterBio();toggleUserMenu();"
-      style="width:100%;padding:11px 14px;background:none;border:none;text-align:left;
-        font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:10px;">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 2C9.5 2 7.5 3.5 6.5 5.5"/><path d="M3 10c0-2.2.8-4.2 2.1-5.8"/>
-        <path d="M21 10a9 9 0 0 0-2.1-5.8"/><path d="M12 8a4 4 0 0 1 4 4c0 1.5-.3 3.5-1 5"/>
-        <path d="M8 12a4 4 0 0 1 .5-1.9"/><path d="M12 8c-1.1 0-2 .4-2.7 1"/>
-        <path d="M12 12v5"/><path d="M9 17c.5 1.5 1.5 3 3 3s2.5-1.5 3-3"/>
-        <path d="M5.5 16.5C4.5 15 4 13.1 4 11"/><path d="M19 11c0 2-.4 3.8-1.2 5.3"/>
-      </svg>
-      Set up Touch ID / Face ID
-    </button>
-    <button onclick="signOut();toggleUserMenu();"
-      style="width:100%;padding:11px 14px;background:none;border:none;text-align:left;
-        font-size:13px;color:#ef5350;cursor:pointer;display:flex;align-items:center;gap:10px;
-        border-top:1px solid var(--bg3);">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef5350" stroke-width="1.8" stroke-linecap="round">
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-      </svg>
-      Sign Out
-    </button>
-  </div>`;
-
-  // Close menu when tapping outside
-  setTimeout(()=>{ document.addEventListener('click', function closeMenu(e){
-    const menu=document.getElementById('user-menu');
-    if(menu && !menu.closest('#user-widget')?.contains(e.target)){
-      menu.style.display='none'; document.removeEventListener('click',closeMenu);
-    }
-  }); }, 100);
+  renderUserWidget(user);
   applyStoredTheme();
   populateSelects();
   subscribeAll();
