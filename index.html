@@ -1258,9 +1258,9 @@ function showApp(user) {
   const w = document.getElementById('user-widget');
   const initials = (user.displayName||user.email||'U')[0].toUpperCase();
   const avatarInner = user.photoURL
-    ? `<img class="user-avatar" src="${user.photoURL}" alt="avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+    ? `<img class="user-avatar" src="${user.photoURL}" alt="avatar">`
     : `<div class="user-initials">${initials}</div>`;
-  w.innerHTML = `<div style="position:relative;cursor:pointer;" onclick="toggleUserMenu()" title="Account">
+  w.innerHTML = `<div style="position:relative;cursor:pointer;width:30px;height:30px;" onclick="toggleUserMenu()" title="Account">
     ${avatarInner}
   </div>
   <div id="user-menu" style="display:none;position:absolute;top:52px;right:12px;
