@@ -1145,8 +1145,13 @@ auth.onAuthStateChanged(user => {
     renderUserWidget(user);  // render immediately, before data loads
     showApp(user);
   } else {
-    showBioButton();
-    show('login-screen');
+    const stored = JSON.parse(localStorage.getItem(BIO_KEY)||'null');
+    if (stored) {
+      // Bio cred exists — show lock screen and auto-trigger biometric
+      showLockScreen(stored);
+    } else {
+      show('login-screen');
+    }
   }
 }, err => {
   // Auth error callback
@@ -1215,16 +1220,88 @@ async function registerBiometric(user) {
   }
 }
 
+// ── Lock screen shown instead of login when bio is registered ────
+function showLockScreen(stored) {
+  // Hide both loading and login, show a dedicated lock screen
+  hide('loading');
+  hide('login-screen');
+  let ls = document.getElementById('lock-screen');
+  if (!ls) {
+    ls = document.createElement('div');
+    ls.id = 'lock-screen';
+    document.body.appendChild(ls);
+  }
+  const t = document.documentElement.getAttribute('data-theme')||'dark';
+  ls.style.cssText = `position:fixed;inset:0;z-index:9998;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:20px;
+    background:${t==='light'?'#f5f5f5':'#0a1628'};`;
+  ls.innerHTML = `
+    <div style="width:70px;height:70px;border-radius:50%;
+      background:linear-gradient(135deg,#0d7f6e,#1a6fc4);
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 0 0 8px rgba(13,127,110,.15);">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
+        stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2C9.5 2 7.5 3.5 6.5 5.5"/>
+        <path d="M3 10c0-2.2.8-4.2 2.1-5.8"/>
+        <path d="M21 10a9 9 0 0 0-2.1-5.8"/>
+        <path d="M12 8a4 4 0 0 1 4 4c0 1.5-.3 3.5-1 5"/>
+        <path d="M8 12a4 4 0 0 1 .5-1.9"/>
+        <path d="M12 8c-1.1 0-2 .4-2.7 1"/>
+        <path d="M12 12v5"/>
+        <path d="M9 17c.5 1.5 1.5 3 3 3s2.5-1.5 3-3"/>
+        <path d="M5.5 16.5C4.5 15 4 13.1 4 11"/>
+        <path d="M19 11c0 2-.4 3.8-1.2 5.3"/>
+      </svg>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:22px;font-weight:800;color:${t==='light'?'#0d2137':'#fff'};
+        margin-bottom:4px;">AHA Finance</div>
+      <div style="font-size:13px;color:${t==='light'?'#666':'rgba(255,255,255,.55)'};">
+        ${stored.name||stored.email||'Welcome back'}
+      </div>
+    </div>
+    <button id="lock-bio-btn" onclick="signInBiometric()"
+      style="display:flex;align-items:center;gap:10px;
+        background:linear-gradient(135deg,#0d7f6e,#1a6fc4);
+        border:none;border-radius:14px;padding:14px 28px;cursor:pointer;
+        font-size:15px;font-weight:700;color:#fff;
+        box-shadow:0 4px 18px rgba(13,127,110,.35);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+        stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2C9.5 2 7.5 3.5 6.5 5.5"/>
+        <path d="M3 10c0-2.2.8-4.2 2.1-5.8"/>
+        <path d="M21 10a9 9 0 0 0-2.1-5.8"/>
+        <path d="M12 8a4 4 0 0 1 4 4c0 1.5-.3 3.5-1 5"/>
+        <path d="M8 12a4 4 0 0 1 .5-1.9"/>
+        <path d="M12 8c-1.1 0-2 .4-2.7 1"/>
+        <path d="M12 12v5"/>
+        <path d="M9 17c.5 1.5 1.5 3 3 3s2.5-1.5 3-3"/>
+        <path d="M5.5 16.5C4.5 15 4 13.1 4 11"/>
+        <path d="M19 11c0 2-.4 3.8-1.2 5.3"/>
+      </svg>
+      Touch ID / Face ID
+    </button>
+    <button onclick="document.getElementById('lock-screen').style.display='none';show('login-screen');"
+      style="background:none;border:none;font-size:12px;
+        color:${t==='light'?'#999':'rgba(255,255,255,.35)'};cursor:pointer;margin-top:-8px;">
+      Use Google instead
+    </button>`;
+
+  // Auto-trigger biometric after short delay for seamless UX
+  setTimeout(() => signInBiometric(), 600);
+}
+
 async function signInBiometric() {
-  const btn = document.getElementById('bio-btn');
+  const btn = document.getElementById('lock-bio-btn') || document.getElementById('bio-btn');
   try {
     const stored = JSON.parse(localStorage.getItem(BIO_KEY)||'null');
-    if (!stored) { toast('No biometric registered. Please sign in with Google first.'); return; }
-    if (!await bioAvailable()) { toast('Biometric not available on this device'); return; }
+    if (!stored) { toast('No biometric registered'); show('login-screen'); return; }
+    if (!await bioAvailable()) { toast('Biometric not available'); show('login-screen'); return; }
 
-    if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+    if (btn) { btn.disabled=true; btn.style.opacity='0.7'; }
 
-    // Step 1: WebAuthn biometric challenge — proves physical presence
+    // Step 1: WebAuthn challenge
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     await navigator.credentials.get({ publicKey: {
       challenge,
@@ -1233,38 +1310,47 @@ async function signInBiometric() {
       timeout: 60000
     }});
 
-    // Step 2: Biometric passed. Try to restore Firebase session.
-    // Firebase LOCAL persistence means the session token survives PWA restarts.
-    // currentUser may be null briefly while Firebase rehydrates from IndexedDB.
-    // Wait up to 3 seconds for it to resolve.
-    const user = await new Promise((resolve) => {
-      if (auth.currentUser) { resolve(auth.currentUser); return; }
-      const unsub = auth.onAuthStateChanged(u => {
-        unsub();
-        resolve(u);
-      });
-      // Fallback timeout
-      setTimeout(() => resolve(auth.currentUser), 3000);
-    });
-
-    if (user) {
-      // Session alive — go straight in
-      hide('login-screen');
-      activeUser = user;
-      renderUserWidget(user);
-      showApp(user);
-      toast('Welcome back, ' + (user.displayName||user.email) + ' 👋');
-    } else {
-      // Session truly expired (very rare with LOCAL persistence)
-      // Silently re-trigger Google sign-in
-      if (btn) { btn.disabled=false; btn.innerHTML = '🔑 Sign in with Touch ID / Face ID'; }
-      toast('Session expired — signing in with Google…');
-      setTimeout(() => signInGoogle(), 800);
+    // Step 2: Biometric passed ✓
+    // Check if Firebase session is still alive (LOCAL persistence)
+    if (auth.currentUser) {
+      const ls = document.getElementById('lock-screen');
+      if (ls) ls.remove();
+      activeUser = auth.currentUser;
+      renderUserWidget(auth.currentUser);
+      showApp(auth.currentUser);
+      return;
     }
+
+    // Step 3: Session expired — re-auth with Google but skip account chooser
+    // using login_hint so user doesn't have to pick an account
+    if (btn) { btn.textContent = 'Connecting…'; }
+    const provider = new firebase.auth.GoogleAuthProvider();
+    if (stored.email) provider.setCustomParameters({ login_hint: stored.email, prompt: 'none' });
+    try {
+      const result = await auth.signInWithPopup(provider);
+      const ls = document.getElementById('lock-screen');
+      if (ls) ls.remove();
+      // onAuthStateChanged will fire and call showApp
+    } catch(popupErr) {
+      // 'none' prompt failed — try with 'select_account' as last resort
+      if (popupErr.code === 'auth/popup-closed-by-user') {
+        if (btn) { btn.disabled=false; btn.style.opacity='1'; btn.textContent='Try again'; }
+        return;
+      }
+      // Silent re-auth not possible — show login screen
+      const ls = document.getElementById('lock-screen');
+      if (ls) ls.remove();
+      show('login-screen');
+      toast('Please sign in with Google to continue');
+    }
+
   } catch(e) {
-    if (btn) { btn.disabled=false; btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M12 2C9.5 2 7.5 3.5 6.5 5.5"/><path d="M3 10c0-2.2.8-4.2 2.1-5.8"/><path d="M21 10a9 9 0 0 0-2.1-5.8"/><path d="M12 8a4 4 0 0 1 4 4c0 1.5-.3 3.5-1 5"/><path d="M8 12a4 4 0 0 1 .5-1.9"/><path d="M12 8c-1.1 0-2 .4-2.7 1"/><path d="M12 12v5"/><path d="M9 17c.5 1.5 1.5 3 3 3s2.5-1.5 3-3"/><path d="M5.5 16.5C4.5 15 4 13.1 4 11"/><path d="M19 11c0 2-.4 3.8-1.2 5.3"/></svg> Sign in with Touch ID / Face ID`; }
-    if (e.name === 'NotAllowedError') toast('Biometric cancelled');
-    else toast('Biometric error: ' + e.message);
+    if (btn) { btn.disabled=false; btn.style.opacity='1'; }
+    if (e.name==='NotAllowedError') {
+      toast('Biometric cancelled');
+    } else {
+      toast('Error: ' + e.message);
+    }
   }
 }
 
