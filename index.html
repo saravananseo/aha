@@ -2745,27 +2745,22 @@ function renderInvest() {
     return parseDateStr(a.date) - parseDateStr(b.date);
   });
 
-  // FD KPIs — total capital + interest received this year (marked months)
-  const activeFD = sortedFD.filter(f => f.status !== 'Closed');
+  // FD KPIs
+  // Active = no status field OR status is not 'Closed'
+  const activeFD = sortedFD.filter(f => !f.status || f.status !== 'Closed');
   const closedFD = sortedFD.filter(f => f.status === 'Closed');
+  // Capital = only active FDs
   const totalCap = activeFD.reduce((s,f) => s + (f.capital||0), 0);
-  let totalReceivedThisYear = 0;
+  // Monthly interest = only active FDs
+  const totalMoActive = activeFD.reduce((s,f) => s + (f.monthly||0), 0);
+  // Received this year = ALL FDs that have marks ticked (active + closed)
+  // Each ticked month = that FD's monthly amount received
+  let receivedThisYear = 0;
   sortedFD.forEach(fd => {
     const marks = fd.marks || {};
     MSHORT.forEach((_,i) => {
       const key = `${currentYear}-m${i}`;
-      if (marks[key]) totalReceivedThisYear += (fd.monthly||0);
-    });
-  });
-  // Monthly interest: only active FDs contribute ongoing interest
-  const totalMoActive = activeFD.reduce((s,f) => s + (f.monthly||0), 0);
-  // Received this year: only mark payments from active FDs count as ongoing
-  let activeReceivedThisYear = 0;
-  activeFD.forEach(fd => {
-    const marks = fd.marks || {};
-    MSHORT.forEach((_,i) => {
-      const key = `${currentYear}-m${i}`;
-      if (marks[key]) activeReceivedThisYear += (fd.monthly||0);
+      if (marks[key] === true) receivedThisYear += (fd.monthly||0);
     });
   });
 
@@ -2814,7 +2809,7 @@ function renderInvest() {
         <div style="width:1px;height:44px;background:rgba(255,255,255,0.15);margin:0 10px;"></div>
         <div style="flex:1;">
           <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:2px;">Received ${currentYear}</div>
-          <div style="font-size:16px;font-weight:800;color:#fcd34d;">${fmtK(activeReceivedThisYear)}</div>
+          <div style="font-size:16px;font-weight:800;color:#fcd34d;">${fmtK(receivedThisYear)}</div>
           <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px;">marked payments</div>
         </div>
       </div>
