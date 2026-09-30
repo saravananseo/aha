@@ -1556,7 +1556,18 @@ function fabClick() {
 function openDailyModal(entry) {
   clearForm('dailyModal');
   document.getElementById('d-month').value = dailyMonth;
-  document.getElementById('d-day').value = new Date().getDate();
+  const todayDay = new Date().getDate();
+  document.getElementById('d-day').value = todayDay;
+
+  // If no entry passed and today already has an entry, auto-open edit
+  if (!entry) {
+    const todayEntry = D.daily.find(e => e.day === todayDay && e.month === dailyMonth);
+    if (todayEntry) {
+      entry = todayEntry;
+      toast(`Editing existing entry for day ${todayDay}`);
+    }
+  }
+
   if (entry) {
     document.getElementById('d-edit-id').value = entry.id;
     document.getElementById('d-day').value = entry.day;
@@ -1580,6 +1591,19 @@ async function saveDailyEntry() {
   const note = document.getElementById('d-note').value.trim();
   if (!day || day < 1 || day > 31) { toast('Enter a valid day (1–31)'); return; }
 
+  const editId = document.getElementById('d-edit-id').value;
+
+  // ── Duplicate check: block if same day+month entry already exists ──
+  const existing = D.daily.find(e => e.day === day && e.month === month);
+  if (existing && existing.id !== editId) {
+    // Instead of creating a duplicate, offer to edit the existing one
+    if (confirm(`Day ${day} already has an entry. Do you want to edit it instead?`)) {
+      closeModal('dailyModal');
+      openDailyModal(existing);
+    }
+    return;
+  }
+
   const incBreak = {
     salary:   n('di-salary'), interest: n('di-interest'),
     dividend: n('di-dividend'), hedging: n('di-hedging'), others: n('di-others')
@@ -1590,7 +1614,6 @@ async function saveDailyEntry() {
   };
 
   const data = { day, month, income: inc, expense: exp, pl: inc - exp, note, incBreak, expBreak, ts: firebase.firestore.FieldValue.serverTimestamp() };
-  const editId = document.getElementById('d-edit-id').value;
   try {
     if (editId) await col('daily').doc(editId).set(data);
     else        await col('daily').add(data);
@@ -1612,7 +1635,14 @@ function renderAll() {
 }
 
 function getDailyForMonth(m) {
-  return Object.values(D.daily).filter(e => e.month === m).sort((a,b) => a.day - b.day);
+  const all = Object.values(D.daily).filter(e => e.month === m);
+  // Deduplicate by day — keep the entry with the latest timestamp
+  const dayMap = new Map();
+  all.forEach(e => {
+    const prev = dayMap.get(e.day);
+    if (!prev || (e.ts?.seconds||0) >= (prev.ts?.seconds||0)) dayMap.set(e.day, e);
+  });
+  return [...dayMap.values()].sort((a,b) => a.day - b.day);
 }
 
 function renderDailyTab() {
